@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HabitRat 首页 · 统一风格示意</title>
+<style>
+  :root {
+    --ink: #2D3340;      /* 深色背景基调 */
+    --steel: #5C6F8E;    /* 蓝灰主色 */
+    --leather: #A38F7A;  /* 皮革/木质中性色 */
+    --gold: #C89D4A;     /* 金色点缀 */
+    --glow: #4FC3FF;     /* 发光蓝 核心识别色 */
+    --paper: #F6F1E6;    /* 页面底色，暖米白，替代冷白 */
+    --card: #FFFFFF;
+    --text-main: #2D3340;
+    --text-sub: #7A7367;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #ddd;
+    display: flex;
+    justify-content: center;
+    padding: 24px 0;
+  }
+  .screen {
+    width: 390px;
+    background: var(--paper);
+    min-height: 780px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .statusbar {
+    background: var(--ink);
+    color: #E9E2D3;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .statusbar .badge {
+    background: var(--gold);
+    color: var(--ink);
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-left: 8px;
+  }
+  .statusbar .right { display: flex; align-items: center; gap: 12px; opacity: 0.9; }
+
+  .hero {
+    background: linear-gradient(155deg, var(--ink) 0%, var(--steel) 100%);
+    padding: 20px 18px 22px;
+    color: #EFEAE0;
+    border-bottom: 2px solid var(--gold);
+  }
+  .hero-top { display: flex; align-items: center; gap: 14px; }
+  .avatar {
+    width: 62px; height: 62px; border-radius: 50%;
+    border: 2px solid var(--gold);
+    background: #1c2029;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    flex-shrink: 0;
+  }
+  .hero-lvl { font-size: 13px; color: var(--gold); font-weight: 700; letter-spacing: 0.5px; }
+  .hero-msg { font-size: 17px; font-weight: 500; margin-top: 2px; }
+  .progress-track {
+    margin-top: 14px;
+    height: 8px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 48%;
+    background: linear-gradient(90deg, var(--gold), var(--glow));
+    border-radius: 6px;
+  }
+  .progress-label { font-size: 12px; color: #C9C2B4; margin-top: 6px; }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .stat-item {
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 8px 6px;
+    text-align: center;
+  }
+  .stat-item .icon { font-size: 15px; color: var(--gold); }
+  .stat-item .val { font-size: 17px; font-weight: 700; margin-top: 2px; }
+  .stat-item .lbl { font-size: 10.5px; color: #B9B2A4; margin-top: 1px; }
+
+  .summary-card {
+    margin: 14px 16px 0;
+    background: var(--card);
+    border-radius: 14px;
+    padding: 14px 10px;
+    display: flex;
+    box-shadow: 0 2px 8px rgba(45,51,64,0.06);
+  }
+  .summary-item { flex: 1; text-align: center; }
+  .summary-item .num { font-size: 22px; font-weight: 700; color: var(--ink); }
+  .summary-item .num.accent { color: #C0542E; }
+  .summary-item .lbl { font-size: 12.5px; color: var(--text-sub); margin-top: 2px; }
+  .summary-divider { width: 1px; background: #EEE7D8; margin: 2px 4px; }
+
+  .segmented {
+    margin: 14px 16px 0;
+    background: #EDE6D6;
+    border-radius: 12px;
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+  }
+  .seg-item {
+    flex: 1;
+    text-align: center;
+    padding: 9px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-sub);
+    border-radius: 9px;
+  }
+  .seg-item.active { background: var(--ink); color: var(--gold); font-weight: 700; }
+
+  .task-list { padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .task-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(45,51,64,0.06);
+  }
+  .task-check {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid var(--leather);
+    flex-shrink: 0;
+  }
+  .task-icon {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: #EFF3F7;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--steel);
+    flex-shrink: 0;
+  }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-size: 15px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .task-time { font-size: 11.5px; color: var(--gold); font-weight: 700; }
+  .task-sub { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+  .task-reward { font-size: 12px; color: var(--steel); margin-top: 3px; font-weight: 600; }
+
+  .navbar {
+    display: flex;
+    background: var(--card);
+    border-top: 1px solid #ECE5D6;
+    padding: 8px 6px 10px;
+  }
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-sub);
+    position: relative;
+  }
+  .nav-item.active { color: var(--ink); }
+  .nav-icon-wrap {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-item.active .nav-icon-wrap { background: #F0E6CC; }
+  .nav-item.active .nav-icon-wrap svg { stroke: var(--ink); }
+  .nav-item .nav-icon-wrap svg { stroke: var(--text-sub); }
+  .nav-label { font-size: 11px; font-weight: 500; }
+  .nav-item.active .nav-label { font-weight: 700; }
+  .nav-dot {
+    position: absolute; bottom: -8px; width: 4px; height: 4px;
+    border-radius: 50%; background: var(--gold);
+  }
+</style>
+</head>
+<body>
+
+<div class="screen">
+
+  <div class="statusbar">
+    <div>2026年7月29日 星期三 <span class="badge">寒暑假</span></div>
+    <div class="right">
+      <span>07:14:28</span>
+      <span>📋</span>
+      <span>🔒</span>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-top">
+      <div class="avatar">🐭</div>
+      <div>
+        <div class="hero-lvl">LV.2 · 坚毅探险家</div>
+        <div class="hero-msg">早安！新的一天开始啦</div>
+      </div>
+    </div>
+    <div class="progress-track"><div class="progress-fill"></div></div>
+    <div class="progress-label">48% · 距下一级还需 78 EXP</div>
+
+    <div class="stat-row">
+      <div class="stat-item"><div class="icon">◆</div><div class="val">46</div><div class="lbl">已获得</div></div>
+      <div class="stat-item"><div class="icon">◷</div><div class="val">45</div><div class="lbl">待生效</div></div>
+      <div class="stat-item"><div class="icon">▣</div><div class="val">0</div><div class="lbl">已兑换</div></div>
+      <div class="stat-item"><div class="icon">◈</div><div class="val">46</div><div class="lbl">可用</div></div>
+    </div>
+  </div>
+
+  <div class="summary-card">
+    <div class="summary-item"><div class="num">0</div><div class="lbl">今日获得</div></div>
+    <div class="summary-divider"></div>
+    <div class="summary-item"><div class="num accent">0</div><div class="lbl">今日已兑换</div></div>
+  </div>
+
+  <div class="segmented">
+    <div class="seg-item active">今日任务</div>
+    <div class="seg-item">周</div>
+    <div class="seg-item">月</div>
+  </div>
+
+  <div class="task-list">
+    <div class="task-card">
+      <div class="task-check"></div>
+      <div class="task-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M5 12a7 7 0 0014 0M12 5v2"/></svg>
+      </div>
+      <div class="task-body">
+        <div class="task-title">妈妈吃早饭 <span class="task-time">9:00前</span></div>
+        <div class="task-sub">今天还没开始</div>
+        <div class="task-reward">EXP +10 · ◆ +10</div>
+      </div>
+    </div>
+
+    <div class="task-card">
+      <div class="task-check"></div>
+      <div class="task-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c-3 3-4 6-4 9a4 4 0 008 0c0-3-1-6-4-9z"/></svg>
+      </div>
+      <div class="task-body">
+        <div class="task-title">刷牙 <span class="task-time">8:00前</span></div>
+        <div class="task-sub">今天还没开始</div>
+        <div class="task-reward">EXP +1 · ◆ +1</div>
+      </div>
+    </div>
+
+    <div class="task-card">
+      <div class="task-check"></div>
+      <div class="task-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M9 12l2 2 4-4"/></svg>
+      </div>
+      <div class="task-body">
+        <div class="task-title">洗脸 <span class="task-time">8:00前</span></div>
+        <div class="task-sub">今天还没开始</div>
+        <div class="task-reward">EXP +2 · ◆ +2</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="navbar">
+    <div class="nav-item active">
+      <div class="nav-icon-wrap">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6 6-2z"/></svg>
+      </div>
+      <div class="nav-label">首页</div>
+      <div class="nav-dot"></div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon-wrap">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10l8-6 8 6v10a1 1 0 01-1 1h-4v-6H9v6H5a1 1 0 01-1-1z"/></svg>
+      </div>
+      <div class="nav-label">Ratty的家</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon-wrap">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8l1.5-4h13L20 8M4 8v11a1 1 0 001 1h14a1 1 0 001-1V8M4 8h16M9 12a3 3 0 006 0"/></svg>
+      </div>
+      <div class="nav-label">商店</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon-wrap">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+      </div>
+      <div class="nav-label">设置</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

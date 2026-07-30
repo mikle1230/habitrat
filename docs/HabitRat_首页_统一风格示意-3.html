@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HabitRat 首页 · 统一风格示意 v2</title>
+<style>
+  :root {
+    --ink: #2D3340;
+    --steel: #5C6F8E;
+    --leather: #A38F7A;
+    --gold: #C89D4A;
+    --glow: #4FC3FF;
+    --paper: #F6F1E6;
+    --card: #FFFFFF;
+    --text-main: #2D3340;
+    --text-sub: #7A7367;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #ddd;
+    display: flex;
+    justify-content: center;
+    padding: 24px 0;
+  }
+  .screen {
+    width: 390px;
+    height: 780px;
+    background: var(--paper);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .statusbar {
+    background: var(--ink);
+    color: #E9E2D3;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .statusbar .badge {
+    background: var(--gold);
+    color: var(--ink);
+    padding: 1px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-left: 6px;
+  }
+  .statusbar .right { display: flex; align-items: center; gap: 10px; opacity: 0.9; }
+
+  .hero {
+    background: linear-gradient(155deg, var(--ink) 0%, var(--steel) 100%);
+    padding: 12px 16px 12px;
+    color: #EFEAE0;
+    border-bottom: 2px solid var(--gold);
+    flex-shrink: 0;
+  }
+  .hero-top { display: flex; align-items: center; gap: 10px; }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 2px solid var(--gold);
+    background: #1c2029;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .hero-mid { flex: 1; min-width: 0; }
+  .hero-lvl { font-size: 11.5px; color: var(--gold); font-weight: 700; letter-spacing: 0.3px; }
+  .hero-msg { font-size: 14.5px; font-weight: 500; margin-top: 1px; }
+  .hero-right { text-align: right; flex-shrink: 0; }
+  .hero-right .pct { font-size: 12px; font-weight: 700; color: var(--glow); }
+  .hero-right .need { font-size: 10px; color: #B9B2A4; }
+
+  .progress-track {
+    margin-top: 8px;
+    height: 5px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 48%;
+    background: linear-gradient(90deg, var(--gold), var(--glow));
+    border-radius: 6px;
+  }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .stat-item {
+    background: rgba(255,255,255,0.08);
+    border-radius: 9px;
+    padding: 5px 4px;
+    text-align: center;
+  }
+  .stat-item .icon { font-size: 12px; color: var(--gold); }
+  .stat-item .val { font-size: 14px; font-weight: 700; margin-top: 1px; }
+  .stat-item .lbl { font-size: 9px; color: #B9B2A4; }
+  .stat-item .today { font-size: 8.5px; color: var(--glow); margin-top: 1px; }
+
+  .segmented {
+    margin: 10px 16px 0;
+    background: #EDE6D6;
+    border-radius: 10px;
+    padding: 3px;
+    display: flex;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+  .seg-item {
+    flex: 1;
+    text-align: center;
+    padding: 6px 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-sub);
+    border-radius: 7px;
+  }
+  .seg-item.active { background: var(--ink); color: var(--gold); font-weight: 700; }
+
+  .completion-row {
+    margin: 8px 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-sub);
+    flex-shrink: 0;
+  }
+  .completion-track {
+    flex: 1;
+    height: 5px;
+    background: #E7E0D0;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .completion-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--glow));
+    border-radius: 4px;
+  }
+  #completion-count { color: var(--ink); font-weight: 600; white-space: nowrap; }
+
+  .task-list-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 16px 8px;
+  }
+  .task-list { display: flex; flex-direction: column; gap: 8px; }
+  .task-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 2px 6px rgba(45,51,64,0.06);
+  }
+  .task-check {
+    width: 24px; height: 24px; border-radius: 50%;
+    border: 2px solid var(--leather);
+    flex-shrink: 0;
+  }
+  .task-icon {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: #EFF3F7;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--steel);
+    flex-shrink: 0;
+  }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-size: 14px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .task-time { font-size: 11px; color: var(--gold); font-weight: 700; }
+  .task-sub-row { display: flex; align-items: center; justify-content: space-between; margin-top: 1px; }
+  .task-sub { font-size: 11.5px; color: var(--text-sub); }
+  .task-reward { font-size: 11.5px; color: var(--steel); font-weight: 600; }
+
+  .navbar {
+    display: flex;
+    background: var(--card);
+    border-top: 1px solid #ECE5D6;
+    padding: 6px 6px 8px;
+    flex-shrink: 0;
+  }
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    color: var(--text-sub);
+    position: relative;
+  }
+  .nav-item.active { color: var(--ink); }
+  .nav-icon-wrap {
+    width: 36px; height: 36px;
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-item.active .nav-icon-wrap { background: #F0E6CC; }
+  .nav-item.active .nav-icon-wrap svg { stroke: var(--ink); }
+  .nav-item .nav-icon-wrap svg { stroke: var(--text-sub); }
+  .nav-label { font-size: 10.5px; font-weight: 500; }
+  .nav-item.active .nav-label { font-weight: 700; }
+  .nav-dot {
+    position: absolute; bottom: -6px; width: 4px; height: 4px;
+    border-radius: 50%; background: var(--gold);
+  }
+
+  .compare-note {
+    width: 390px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div>
+<div class="screen">
+
+  <div class="statusbar">
+    <div>2026年7月29日 星期三 <span class="badge">寒暑假</span></div>
+    <div class="right">
+      <span>07:14:28</span>
+      <span>📋</span>
+      <span>🔒</span>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-top">
+      <div class="avatar">🐭</div>
+      <div class="hero-mid">
+        <div class="hero-lvl">LV.2 · 坚毅探险家</div>
+        <div class="hero-msg">早安！新的一天开始啦</div>
+      </div>
+      <div class="hero-right">
+        <div class="pct">48%</div>
+        <div class="need">还需78EXP</div>
+      </div>
+    </div>
+    <div class="progress-track"><div class="progress-fill"></div></div>
+
+    <div class="stat-row">
+      <div class="stat-item"><div class="val">◆46</div><div class="lbl">已获得</div><div class="today" id="stat-earn">今日+0</div></div>
+      <div class="stat-item"><div class="val">◷45</div><div class="lbl">待生效</div></div>
+      <div class="stat-item"><div class="val">▣0</div><div class="lbl">已兑换</div><div class="today" id="stat-redeem">今日+0</div></div>
+      <div class="stat-item"><div class="val">◈46</div><div class="lbl">可用</div></div>
+    </div>
+  </div>
+
+  <div class="segmented">
+    <div class="seg-item active" data-period="today">今日任务</div>
+    <div class="seg-item" data-period="week">周</div>
+    <div class="seg-item" data-period="month">月</div>
+  </div>
+
+  <div class="completion-row" id="completion-row" style="display:none;">
+    <span id="completion-label">本周</span>
+    <span class="completion-track"><span class="completion-fill" id="completion-fill"></span></span>
+    <span id="completion-count">0/0 已完成</span>
+  </div>
+
+  <div class="task-list-wrap">
+    <div class="task-list">
+      <div class="task-card">
+        <div class="task-check"></div>
+        <div class="task-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M5 12a7 7 0 0014 0M12 5v2"/></svg>
+        </div>
+        <div class="task-body">
+          <div class="task-title">妈妈吃早饭 <span class="task-time">9:00前</span></div>
+          <div class="task-sub-row"><div class="task-sub">今天还没开始</div><div class="task-reward">EXP+10 ◆+10</div></div>
+        </div>
+      </div>
+
+      <div class="task-card">
+        <div class="task-check"></div>
+        <div class="task-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c-3 3-4 6-4 9a4 4 0 008 0c0-3-1-6-4-9z"/></svg>
+        </div>
+        <div class="task-body">
+          <div class="task-title">刷牙 <span class="task-time">8:00前</span></div>
+          <div class="task-sub-row"><div class="task-sub">今天还没开始</div><div class="task-reward">EXP+1 ◆+1</div></div>
+        </div>
+      </div>
+
+      <div class="task-card">
+        <div class="task-check"></div>
+        <div class="task-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <div class="task-body">
+          <div class="task-title">洗脸 <span class="task-time">8:00前</span></div>
+          <div class="task-sub-row"><div class="task-sub">今天还没开始</div><div class="task-reward">EXP+2 ◆+2</div></div>
+        </div>
+      </div>
+
+      <div class="task-card">
+        <div class="task-check"></div>
+        <div class="task-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 2v4M16 2v4M4 10h16"/></svg>
+        </div>
+        <div class="task-body">
+          <div class="task-title">吃早饭 <span class="task-time">8:30前</span></div>
+          <div class="task-sub-row"><div class="task-sub">今天还没开始</div><div class="task-reward">EXP+3 ◆+3</div></div>
+        </div>
+      </div>
+
+      <div class="task-card">
+        <div class="task-check"></div>
+        <div class="task-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5a2 2 0 012-2h8l6 6v10a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M14 3v6h6"/></svg>
+        </div>
+        <div class="task-body">
+          <div class="task-title">整理书包 <span class="task-time">21:00前</span></div>
+          <div class="task-sub-row"><div class="task-sub">今天还没开始</div><div class="task-reward">EXP+2 ◆+2</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="navbar">
+    <div class="nav-item active">
+      <div class="nav-icon-wrap">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6 6-2z"/></svg>
+      </div>
+      <div class="nav-label">首页</div>
+      <div class="nav-dot"></div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon-wrap">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10l8-6 8 6v10a1 1 0 01-1 1h-4v-6H9v6H5a1 1 0 01-1-1z"/></svg>
+      </div>
+      <div class="nav-label">Ratty的家</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon-wrap">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8l1.5-4h13L20 8M4 8v11a1 1 0 001 1h14a1 1 0 001-1V8M4 8h16M9 12a3 3 0 006 0"/></svg>
+      </div>
+      <div class="nav-label">商店</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon-wrap">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+      </div>
+      <div class="nav-label">设置</div>
+    </div>
+  </div>
+
+</div>
+<div class="compare-note">v2：压缩头部固定区域后，同屏可见约5个打卡事项（原来约2-3个）。点击上方"今日任务/周/月"试试统计区域的联动效果。</div>
+</div>
+
+<script>
+  const periodData = {
+    today: { earn: '今日+0', redeem: '今日+0', showCompletion: false },
+    week:  { earn: '本周+18', redeem: '本周+0', showCompletion: true, label: '本周', count: '3/12 已完成', pct: 25 },
+    month: { earn: '本月+46', redeem: '本月+0', showCompletion: true, label: '本月', count: '8/40 已完成', pct: 20 }
+  };
+  const segItems = document.querySelectorAll('.seg-item');
+  const statEarn = document.getElementById('stat-earn');
+  const statRedeem = document.getElementById('stat-redeem');
+  const completionRow = document.getElementById('completion-row');
+  const completionLabel = document.getElementById('completion-label');
+  const completionCount = document.getElementById('completion-count');
+  const completionFill = document.getElementById('completion-fill');
+
+  segItems.forEach(item => {
+    item.addEventListener('click', () => {
+      segItems.forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      const d = periodData[item.dataset.period];
+      statEarn.textContent = d.earn;
+      statRedeem.textContent = d.redeem;
+      if (d.showCompletion) {
+        completionRow.style.display = 'flex';
+        completionLabel.textContent = d.label;
+        completionCount.textContent = d.count;
+        completionFill.style.width = d.pct + '%';
+      } else {
+        completionRow.style.display = 'none';
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
