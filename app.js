@@ -3182,28 +3182,54 @@ function init() {
   // lvlupOverlay 背景点击关闭
   document.getElementById('lvlupOverlay').addEventListener('click', function(e) { if (e.target === this) this.classList.remove('show'); });
   switchView('home');
-  // XP 进度条入场动画：先归零再滑到实际位置
-  setTimeout(function() {
+  // XP 进度条 + 数字倒计时动画
+  requestAnimationFrame(function() {
     var fill = document.getElementById('statusExpFill');
     var need = document.getElementById('statusExpNeed');
-    if (fill) { fill.style.width = '0%'; fill.style.setProperty('--xp-pct', '0'); }
-    if (need) { need.style.left = '0%'; }
-    // 强制回流后设置实际值，触发 CSS 过渡
-    setTimeout(function() {
-      var childId2 = getChildMembers()[0]?.id || selectedMemberId || members[0]?.id;
-      if (childId2) {
-        var p2 = getExpProgress(childId2);
-        if (fill) { fill.style.width = p2.progress + '%'; fill.style.setProperty('--xp-pct', p2.progress); }
-        if (need) {
-          var pVal = p2.progress;
-          need.textContent = '还需 ' + p2.needExp + ' EXP';
-          if (pVal > 80) { need.style.left = 'auto'; need.style.right = '0'; need.style.textAlign = 'right'; }
-          else { need.style.left = pVal + '%'; need.style.right = 'auto'; need.style.textAlign = 'left'; }
-        }
+    var cid = getChildMembers()[0]?.id || selectedMemberId || members[0]?.id;
+    if (!cid) { updateTabPill(); return; }
+    var p = getExpProgress(cid);
+    // 本级总需 EXP = 剩余 + 已获得（用于倒计时起始值）
+    var lvlExp = getExpForLevel(p.level);
+    var nextExp = getExpForLevel(p.level + 1);
+    var totalNeed = nextExp - lvlExp;
+    var startVal = totalNeed;
+    var endVal = p.needExp;
+    // 先归零
+    if (fill) { fill.style.transition = 'none'; fill.style.width = '0%'; fill.style.setProperty('--xp-pct', '0'); }
+    if (need) {
+      need.style.transition = 'none'; need.style.left = '0%';
+      need.textContent = '还需 ' + startVal + ' EXP';
+    }
+    if (fill) void fill.offsetWidth;
+    // 恢复过渡，进度条先动
+    if (fill) { fill.style.transition = ''; fill.style.width = p.progress + '%'; fill.style.setProperty('--xp-pct', p.progress); }
+    // 数字倒计时（ease-out 0.6s）
+    if (need && startVal !== endVal) {
+      need.style.transition = '';
+      var pv = p.progress;
+      if (pv > 80) { need.style.left = 'auto'; need.style.right = '0'; need.style.textAlign = 'right'; }
+      else { need.style.left = pv + '%'; need.style.right = 'auto'; need.style.textAlign = 'left'; }
+      var startTime = performance.now();
+      var range = startVal - endVal;
+      function countStep(ts) {
+        var elapsed = ts - startTime;
+        var frac = Math.min(elapsed / 800, 1);
+        var eased = 1 - Math.pow(1 - frac, 3);
+        need.textContent = '还需 ' + Math.round(startVal - range * eased) + ' EXP';
+        if (frac < 1) requestAnimationFrame(countStep);
+        else need.textContent = '还需 ' + endVal + ' EXP';
       }
-      updateTabPill();
-    }, 50);
-  }, 50);
+      requestAnimationFrame(countStep);
+    } else if (need) {
+      need.style.transition = '';
+      need.textContent = '还需 ' + endVal + ' EXP';
+      var pv2 = p.progress;
+      if (pv2 > 80) { need.style.left = 'auto'; need.style.right = '0'; need.style.textAlign = 'right'; }
+      else { need.style.left = pv2 + '%'; need.style.right = 'auto'; need.style.textAlign = 'left'; }
+    }
+    updateTabPill();
+  });
   window.addEventListener('resize', function() { updateTabPill(); });
   updatePeriodSummary('today');
   initSync();
