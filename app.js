@@ -2621,7 +2621,7 @@ function showDayDetail(date) {
   const isToday = ds === todayStr;
   const locked = isDateLocked(ds);
   const tempUnlocked = !!unlockedForEdit[ds];
-  const editable = (isToday || tempUnlocked) && !locked;
+  const editable = (isToday && !locked) || tempUnlocked;
 
   let titleHtml = fmtDateCN(d) + ' 星期' + weekdays[d.getDay()];
   if (isPast && !tempUnlocked && !isToday) {
