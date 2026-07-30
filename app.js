@@ -3214,7 +3214,7 @@ function init() {
       var range = startVal - endVal;
       function countStep(ts) {
         var elapsed = ts - startTime;
-        var frac = Math.min(elapsed / 800, 1);
+        var frac = Math.min(elapsed / 2000, 1);
         var eased = 1 - Math.pow(1 - frac, 3);
         need.textContent = '还需 ' + Math.round(startVal - range * eased) + ' EXP';
         if (frac < 1) requestAnimationFrame(countStep);
