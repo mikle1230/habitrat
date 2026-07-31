@@ -836,40 +836,102 @@ function recomputeStreaks() {
   streakState = {}; effectiveLog = {};
   const todayStr = fmtDateFull(new Date());
 
-  // 清除所有单次打卡产生的 earn_exp，重置 totalExp，重建时重新计算
-  transactions = transactions.filter(t => !(t.reason && t.reason.startsWith('[单次]') && t.type === 'earn_exp'));
-  members.forEach(m => { if (m.role === 'child') m.totalExp = 0; });
+  // 建立已处理记录索引：已发过 EXP/Coin 的日期+习惯 不再重复发放，保留历史分值
+  var earnedExpSet = {};
+  var earnedCoinSet = {};
+  transactions.forEach(function(t) {
+    if (t.type === 'earn_exp' && t.reason && t.reason.startsWith('[单次] ')) {
+      var key = t.createdAt + '|' + t.reason.slice(4); // date|habitTitle
+      earnedExpSet[key] = true;
+    }
+    if (t.type === 'earn_coin' && t.reason && t.reason.indexOf(' 连续达标') > -1) {
+      earnedCoinSet[t.createdAt + '|' + t.reason] = true;
+    }
+  });
 
-  getActiveHabits().forEach(h => {
+  // 清除孤儿交易：打卡状态已变为 ✗/○ 但交易还在的
+  var validExpKeys = {};
+  var validCoinKeys = {};
+  const cursor2 = new Date(); cursor2.setFullYear(cursor2.getFullYear() - 1);
+  while (fmtDateFull(cursor2) <= todayStr) {
+    var ds2 = fmtDateFull(cursor2);
+    getActiveHabits().forEach(function(h) {
+      if (!isDayApplicable(h, cursor2)) return;
+      if (getDayStatus(h, cursor2) === '✓') {
+        validExpKeys[ds2 + '|' + h.title] = true;
+        // Check if this day completes a streak (same logic as below)
+        var sc = (streakState[h.id] && streakState[h.id].count) || 0;
+        var prevDate = (streakState[h.id] && streakState[h.id].lastDate) || null;
+        if (prevDate && datesConsecutive(new Date(prevDate), cursor2)) { sc++; }
+        else if (prevDate && prevDate === ds2) {}
+        else { sc = 1; }
+        if (!streakState[h.id]) streakState[h.id] = { count: 0, lastDate: null };
+        streakState[h.id].count = sc;
+        streakState[h.id].lastDate = ds2;
+        if (sc >= (h.streakNeed || 5)) {
+          validCoinKeys[ds2 + '|' + h.title + ' 连续达标'] = true;
+          streakState[h.id].count = 0;
+          streakState[h.id].lastDate = null;
+        }
+      } else if (getDayStatus(h, cursor2) === '✗' || (getDayStatus(h, cursor2) === '○' && ds2 < todayStr)) {
+        if (streakState[h.id]) { streakState[h.id].count = 0; streakState[h.id].lastDate = null; }
+      }
+    });
+    cursor2.setDate(cursor2.getDate() + 1);
+  }
+  // Remove orphan transactions (status changed but old tx remains)
+  transactions = transactions.filter(function(t) {
+    if (t.type === 'earn_exp' && t.reason && t.reason.startsWith('[单次] ')) {
+      return validExpKeys[t.createdAt + '|' + t.reason.slice(4)];
+    }
+    if (t.type === 'earn_coin' && t.reason && t.reason.indexOf(' 连续达标') > -1) {
+      return validCoinKeys[t.createdAt + '|' + t.reason];
+    }
+    return true;
+  });
+
+  // Reset for the actual computation pass
+  streakState = {}; effectiveLog = {};
+  members.forEach(function(m) { if (m.role === 'child') m.totalExp = 0; });
+
+  getActiveHabits().forEach(function(h) {
     streakState[h.id] = { count: 0, lastDate: null };
     effectiveLog[h.id] = [];
   });
 
-  // 从一年前逐日遍历到今天（用 getDayStatus 查状态，与 setDayStatus 使用相同的底层函数，保证一致性）
-  const cursor = new Date(); cursor.setFullYear(cursor.getFullYear() - 1);
+  // Main computation pass: only add NEW transactions for unprocessed dates
+  var cursor = new Date(); cursor.setFullYear(cursor.getFullYear() - 1);
   while (fmtDateFull(cursor) <= todayStr) {
-    const ds = fmtDateFull(cursor);
-    getActiveHabits().forEach(h => {
+    var ds = fmtDateFull(cursor);
+    getActiveHabits().forEach(function(h) {
       if (!isDayApplicable(h, cursor)) return;
-      const status = getDayStatus(h, cursor);
+      var status = getDayStatus(h, cursor);
       if (status === '✓') {
-        const meta = getHabitMeta(h.id);
-        const singleExp = h.expValue || meta.expValue || 10;
-        transactions.push({ id: genId(), memberId: meta.ownerMemberId, type: 'earn_exp', amount: singleExp, reason: '[单次] ' + h.title, createdAt: ds });
-        const mem = getMemberById(meta.ownerMemberId);
-        if (mem) mem.totalExp += singleExp;
+        var meta = getHabitMeta(h.id);
+        var singleExp = h.expValue || meta.expValue || 10;
+        var expKey = ds + '|' + h.title;
+        // Only add earn_exp if not already processed (preserves historical value)
+        if (!earnedExpSet[expKey]) {
+          transactions.push({ id: genId(), memberId: meta.ownerMemberId, type: 'earn_exp', amount: singleExp, reason: '[单次] ' + h.title, createdAt: ds });
+        }
+        // Recalculate member totalExp from ALL earn_exp transactions (not just new ones)
+        var mem = getMemberById(meta.ownerMemberId);
+        if (mem && !earnedExpSet[expKey]) mem.totalExp += singleExp;
 
-        const prev = streakState[h.id].lastDate;
+        var prev = streakState[h.id].lastDate;
         if (prev && datesConsecutive(new Date(prev), cursor)) { streakState[h.id].count++; }
         else if (prev && prev === ds) {}
         else { streakState[h.id].count = 1; }
         streakState[h.id].lastDate = ds;
 
-        if (streakState[h.id].count >= h.streakNeed) {
-          effectiveLog[h.id].push({ date: ds, pts: (h.expValue || h.coinValue || 10) * h.streakNeed });
-          const earnCoin = (h.coinValue || meta.coinValue || 10) * h.streakNeed;
-          transactions = transactions.filter(t => !(t.reason && t.reason.includes(h.title + ' 连续达标') && t.createdAt === ds));
-          transactions.push({ id: genId(), memberId: meta.ownerMemberId, type: 'earn_coin', amount: earnCoin, reason: h.title + ' 连续达标', createdAt: ds });
+        if (streakState[h.id].count >= (h.streakNeed || 5)) {
+          effectiveLog[h.id].push({ date: ds, pts: (h.expValue || h.coinValue || 10) * (h.streakNeed || 5) });
+          var earnCoin = (h.coinValue || meta.coinValue || 10) * (h.streakNeed || 5);
+          var coinKey = ds + '|' + h.title + ' 连续达标';
+          // Only add earn_coin if not already processed
+          if (!earnedCoinSet[coinKey]) {
+            transactions.push({ id: genId(), memberId: meta.ownerMemberId, type: 'earn_coin', amount: earnCoin, reason: h.title + ' 连续达标', createdAt: ds });
+          }
           streakState[h.id].count = 0;
           streakState[h.id].lastDate = null;
         }
@@ -879,8 +941,14 @@ function recomputeStreaks() {
     });
     cursor.setDate(cursor.getDate() + 1);
   }
+  // Recompute totalExp from ALL earn_exp transactions
+  members.forEach(function(m) {
+    if (m.role === 'child') {
+      m.totalExp = transactions.filter(function(t) { return t.memberId === m.id && (t.type === 'earn_exp' || t.type === 'bonus_exp'); }).reduce(function(s, t) { return s + t.amount; }, 0);
+    }
+  });
   checkLevelUps();
-  }
+}
 
 function getEffPts(habitId) { return (effectiveLog[habitId]||[]).reduce((s,e) => s + e.pts, 0); }
 function getStreakCount(habitId) { return (streakState[habitId]||{}).count || 0; }
@@ -1931,10 +1999,73 @@ function updateSyncIndicator() {
 // ========== Log/Backup/Toast ==========
 function toggleLog() { const ov = document.getElementById('logOverlay'); if (ov.classList.contains('show')) { ov.classList.remove('show'); } else { renderLog(); ov.classList.add('show'); } }
 function renderLog() {
-  const devEl = document.getElementById('logDeviceId'); if (devEl) devEl.textContent = DEVICE_ID;
   const list = document.getElementById('logList'); if (!list) return;
   if (operationLog.length === 0) { list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2)">暂无操作记录</div>'; return; }
   list.innerHTML = operationLog.map(function(e) { var t = new Date(e.time); var timeStr = (t.getMonth()+1)+'/'+t.getDate()+' '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0'); return '<div class="log-item"><span class="li-time">'+timeStr+'</span><span class="li-device">'+e.device+'</span><span class="li-person">'+e.person+'</span><span class="li-action">'+e.action+'</span><span class="li-detail">'+e.detail+'</span></div>'; }).join('');
+}
+
+// ========== 回顾页面（底部"日志"tab） ==========
+function renderReviewPage() {
+  var container = document.getElementById('reviewContent');
+  if (!container) return;
+  var habits = getActiveHabits();
+  if (!habits.length) { container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2)">还没有习惯，去设置中添加吧</div>'; return; }
+  var today = new Date(); today.setHours(0,0,0,0);
+  var stats = [];
+  habits.forEach(function(h) {
+    var total = 0, done = 0, streak = 0;
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(today); d.setDate(today.getDate() - i);
+      if (!isDayApplicable(h, d)) continue;
+      total++; if (getDayStatus(h, d) === '✓') done++;
+    }
+    for (var j = 0; j < 60; j++) {
+      var d2 = new Date(today); d2.setDate(today.getDate() - j);
+      if (!isDayApplicable(h, d2)) continue;
+      if (getDayStatus(h, d2) === '✓') streak++; else break;
+    }
+    var rate = total ? Math.round(done / total * 100) : 0;
+    stats.push({ habit: h, rate: rate, done: done, total: total, streak: streak });
+  });
+  stats.sort(function(a, b) { return b.rate - a.rate; });
+  var best = stats.slice(0, 2);
+  var worst = stats.slice(-2).reverse();
+  var todayTotal = 0, todayDone = 0;
+  habits.forEach(function(h) {
+    if (!isDayApplicable(h, today)) return;
+    todayTotal++; if (getDayStatus(h, today) === '✓') todayDone++;
+  });
+  var overallRate = 0, overallTotal = 0;
+  stats.forEach(function(s) { overallRate += s.rate; overallTotal++; });
+  overallRate = overallTotal ? Math.round(overallRate / overallTotal) : 0;
+
+  var html = '';
+  html += '<div class="review-summary">'
+    + '<div class="rs-card"><div class="rs-val">'+todayDone+'/'+todayTotal+'</div><div class="rs-label">今日完成</div></div>'
+    + '<div class="rs-card"><div class="rs-val">'+overallRate+'%</div><div class="rs-label">7天完成率</div></div>'
+    + '</div>';
+
+  html += '<div class="review-section"><div class="review-label">⭐ 表现亮眼</div>';
+  best.forEach(function(s) {
+    html += '<div class="review-item">'
+      + '<div class="ri-emoji">'+(s.habit.emoji||'📌')+'</div>'
+      + '<div class="ri-info"><div class="ri-name">'+s.habit.title+'</div><div class="ri-msg">'+(s.streak>1?'连续 '+s.streak+' 天坚持，很棒！':'近7天完成 '+s.done+'/'+s.total+' 次')+'</div></div>'
+      + '<div class="ri-stat good">'+s.rate+'%</div>'
+      + '</div>';
+  });
+  html += '</div>';
+
+  html += '<div class="review-section"><div class="review-label">💪 继续加油</div>';
+  worst.forEach(function(s) {
+    var tip = s.rate < 30 ? '试试调整时间，找到合适的节奏' : (s.rate < 60 ? '再坚持一下就能看到变化' : '只差一点点了，加油！');
+    html += '<div class="review-item">'
+      + '<div class="ri-emoji">'+(s.habit.emoji||'📌')+'</div>'
+      + '<div class="ri-info"><div class="ri-name">'+s.habit.title+'</div><div class="ri-msg">'+tip+'</div></div>'
+      + '<div class="ri-stat warm">'+s.rate+'%</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
 }
 function exportFullBackup() {
   const data = getSyncData(); const filename = '好习惯积分表_备份_' + fmtDateFull(new Date()) + '.json';
@@ -2169,8 +2300,7 @@ function switchView(view) {
   } else if (view === 'analytics') {
     document.getElementById('analyticsView').style.display = 'block';
     document.querySelector('.tab[data-tab="analytics"]').classList.add('active');
-    var mid = getChildMembers()[0]?.id || selectedMemberId;
-    if (mid) renderAnalyticsView(mid);
+    renderReviewPage();
   }
   updateHeader();
   updateTabPill();
@@ -2378,7 +2508,7 @@ function refreshCurrentView() {
   else if (currentView === 'growth') renderGrowthView();
   else if (currentView === 'shop') renderShopView();
   else if (currentView === 'settings') renderSettings();
-  else if (currentView === 'analytics') { var m=getChildMembers()[0]?.id; if(m) renderAnalyticsView(m); }
+  else if (currentView === 'analytics') { renderReviewPage(); }
   else renderHomeView();
   updateStatusBar();
 }

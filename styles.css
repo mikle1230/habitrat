@@ -1234,6 +1234,22 @@ body { font-family: var(--font-body); background: var(--body-bg); color: var(--i
 .log-panel-list { flex:1; overflow-y:auto; padding:8px 0; }
 .log-item { display:flex; align-items:flex-start; gap:8px; padding:6px 16px; font-size:12px; border-bottom:1px solid var(--paper-deep); }
 .log-item .li-time { color:var(--ink-soft); white-space:nowrap; min-width:50px; }
+/* Review page */
+.review-section { margin-bottom: 20px; }
+.review-section:last-child { margin-bottom: 0; }
+.review-label { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.review-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--paper); border-radius: 10px; margin-bottom: 6px; }
+.review-item .ri-emoji { font-size: 20px; flex-shrink: 0; }
+.review-item .ri-info { flex: 1; min-width: 0; }
+.review-item .ri-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.review-item .ri-msg { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+.review-item .ri-stat { font-size: 18px; font-weight: 800; font-family: var(--font-display); flex-shrink: 0; }
+.review-item .ri-stat.good { color: var(--teal); }
+.review-item .ri-stat.warm { color: var(--amber-deep); }
+.review-summary { display: flex; gap: 8px; margin-bottom: 20px; }
+.review-summary .rs-card { flex: 1; text-align: center; background: var(--card); border-radius: 12px; padding: 14px 8px; box-shadow: 0 2px 6px rgba(45,51,64,.05); }
+.review-summary .rs-card .rs-val { font-size: 22px; font-weight: 800; font-family: var(--font-display); color: var(--ink); }
+.review-summary .rs-card .rs-label { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
 
 /* ===== 设置视图(内联) 通用 ===== */
 .ss-field { display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
