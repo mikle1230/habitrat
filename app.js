@@ -1574,7 +1574,8 @@ var sceneZones = [
   { x:4, y:28, w:16, h:20 },  // window
   { x:4, y:51, w:8, h:24 },   // wash
   { x:13, y:63, w:9, h:18 },  // wash
-  { x:12, y:48, w:27, h:15 }, // sleep
+  { x:13, y:47, w:18, h:14 }, // sleep
+  { x:31, y:51, w:9, h:12 },  // chest (reserved)
   { x:59, y:29, w:19, h:37 }, // desk
   { x:72, y:70, w:25, h:25 }, // dining
 ];
@@ -1601,11 +1602,12 @@ function handleSceneClick(e) {
   var xPct = (e.clientX - rect.left) / rect.width * 100;
   var yPct = (e.clientY - rect.top) / rect.height * 100;
   if (currentScene === 'main') {
-    var sceneMap = { 0:'window', 1:'wash', 2:'wash', 3:'sleep', 4:'desk', 5:'dining' };
+    var sceneMap = { 0:'window', 1:'wash', 2:'wash', 3:'sleep', 4:'dressup', 5:'desk', 6:'dining' };
     for (var i = 0; i < sceneZones.length; i++) {
       var z = sceneZones[i];
       if (xPct >= z.x && xPct <= z.x+z.w && yPct >= z.y && yPct <= z.y+z.h) {
-        switchScene(sceneMap[i]); return;
+        if (sceneMap[i] === 'dressup') { toggleDressupPanel(); return; }
+        if (sceneMap[i]) switchScene(sceneMap[i]); return;
       }
     }
   } else if (currentScene === 'desk') {
@@ -1727,7 +1729,7 @@ function closeDressupPanel() {
 function renderScene(memberId) {
   const prog = getExpProgress(memberId);
   const level = prog.level;
-  document.getElementById('sceneInfo').textContent = '总EXP: ' + prog.currentExp + ' · ' + getTitleForLevel(level);
+  var si = document.getElementById('sceneInfo'); if (si) si.textContent = '总EXP: ' + prog.currentExp + ' · ' + getTitleForLevel(level);
   // Level evolution: room decorations
   toggleEvo('evoFlower', level >= 4);
   toggleEvo('evoStars', level >= 10);
