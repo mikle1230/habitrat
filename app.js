@@ -2206,49 +2206,105 @@ function handlePinError(msg) {
 function isDesktop() { return false; } // 始终移动端，打印通过手动按钮触发
 function renderPrintableWeek() {
   if (!currentWeek) currentWeek = getMonday(new Date());
-  const dates = []; for (let i = 0; i < 7; i++) { const d = new Date(currentWeek); d.setDate(currentWeek.getDate()+i); dates.push(d); }
-  const today = fmtDateFull(new Date());
-  const DAY_NAMES2 = ['一','二','三','四','五','六','日'];
-  const hdrIds = ['pHdrMon','pHdrTue','pHdrWed','pHdrThu','pHdrFri','pHdrSat','pHdrSun'];
-  hdrIds.forEach((id, i) => { const el = document.getElementById(id); if (el) el.textContent = '周'+DAY_NAMES2[i]+' '+dates[i].getDate()+'日'; });
-  document.getElementById('pWeekBadge').textContent = '第'+(getWeekKey(currentWeek).split('-W')[1])+'周';
-  document.getElementById('pWeekRange').textContent = fmtDate(dates[0])+' - '+fmtDate(dates[6]);
-  const refMode = getModeForDate(currentWeek);
-  document.getElementById('pModeLabel').textContent = getModeLabel(refMode);
-  document.getElementById('pModeLabel').className = 'mode-badge '+getModeClass(refMode);
-  const savedName = (localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')) || '小美';
-  document.getElementById('pChildName').textContent = savedName;
-  let weekEff = 0;
-  const allExp = getChildMembers().reduce((s,m) => s + getTotalExp(m.id), 0);
-  const allCoin = getChildMembers().reduce((s,m) => s + getCoinBalance(m.id), 0);
-  document.getElementById('pSummary').innerHTML = '<div class="box effective">总EXP<div class="val">'+allExp+'</div></div><div class="box pending">可用Coin<div class="val">'+allCoin+'</div></div>';
-  // Group habits by member
-  const memberGroups = {};
-  getActiveHabits().forEach(h => { const mid = h.ownerMemberId; if (!memberGroups[mid]) memberGroups[mid] = []; memberGroups[mid].push(h); });
-  let html = '';
-  Object.entries(memberGroups).forEach(([mid, habits]) => {
-    html += '<tr class="p-person-header"><td colspan="13">'+getMemberName(mid)+'</td></tr>';
-    habits.forEach(h => {
-      const sc = getStreakCount(h.id); const meta = getHabitMeta(h.id);
-      const ruleText = (refMode==='vacation' && (h.ruleVacation)) ? h.ruleVacation : (h.ruleText || '');
-      html += '<tr class="p-data-row" data-habit="'+h.id+'"><td style="font-size:16px;">'+(h.emoji||'')+'</td><td class="p-item-name">'+h.title+'</td><td class="p-rule-text">'+(ruleText||'')+'</td><td class="p-streak-cell"><span class="p-streak-num '+(sc>0?'active':'')+'">'+sc+'</span><span class="p-streak-target">/'+h.streakNeed+'</span></td><td class="p-pts-val">E'+(h.expValue||10)+'/C'+(h.coinValue||10)+'</td>';
-      for (let d = 0; d < 7; d++) {
-        const ds = fmtDateFull(dates[d]); const st = getDayStatus(h, dates[d]);
-        let cls = 'p-day-cell'; if (st === '✓') cls += ' checked'; else if (st === '✗') cls += ' void'; else if (st === 'na') cls += ' na';
-        html += '<td class="'+cls+'" data-habit="'+h.id+'" data-day="'+d+'" data-date="'+ds+'"></td>';
+  var dates = []; for (var i = 0; i < 7; i++) { var dd = new Date(currentWeek); dd.setDate(currentWeek.getDate()+i); dates.push(dd); }
+  var today = fmtDateFull(new Date());
+  var DOW = ['一','二','三','四','五','六','日'];
+  var mode = getModeForDate(currentWeek);
+  var wkNum = getWeekKey(currentWeek).split('-W')[1];
+  var savedName = (localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')) || '小美';
+
+  // Build inline-styled HTML
+  var S = ' style="';
+  var css = {
+    page: 'font-family:-apple-system,PingFang SC,Microsoft YaHei,sans-serif;color:#2D3340;max-width:210mm;margin:0 auto;padding:12mm 14mm;background:#fff;',
+    h1: 'font-size:22px;font-weight:900;text-align:center;margin:0 0 2mm;letter-spacing:1px;',
+    sub: 'font-size:11px;color:#7A7367;text-align:center;margin:0 0 6mm;',
+    statRow: 'display:flex;gap:3mm;margin-bottom:6mm;',
+    statBox: 'flex:1;border:2px solid #E0D9CB;border-radius:6px;padding:3mm 4mm;text-align:center;',
+    statVal: 'font-size:18px;font-weight:800;',
+    statLbl: 'font-size:10px;color:#7A7367;margin-top:1mm;',
+    table: 'width:100%;border-collapse:collapse;font-size:11px;',
+    th: 'background:#2D3340;color:#EFEAE0;padding:2mm 1.5mm;font-size:10px;font-weight:600;text-align:center;',
+    td: 'border:1px solid #E0D9CB;padding:2mm 2mm;text-align:center;vertical-align:middle;',
+    tdName: 'text-align:left;font-weight:600;font-size:11px;',
+    tdRule: 'text-align:left;font-size:9px;color:#5C6F8E;',
+    tdStreak: 'background:#FBF7EF;',
+    tdPts: 'font-size:10px;color:#C89D4A;font-weight:600;',
+    memberRow: 'background:#F6F1E6;font-weight:700;font-size:12px;text-align:left;',
+    dotDone: 'color:#1FAE9F;font-weight:900;font-size:13px;',
+    dotMiss: 'color:#FF6B6B;font-weight:900;font-size:12px;',
+    dotPend: 'color:#ccc;font-size:12px;',
+    dotNA: 'color:#ddd;font-size:11px;',
+    legend: 'display:flex;gap:10px;font-size:10px;color:#7A7367;margin-top:4mm;padding-top:2mm;border-top:1px solid #E0D9CB;',
+    sign: 'display:flex;gap:10mm;justify-content:flex-end;font-size:11px;margin-top:6mm;',
+    signLine: 'border-bottom:1px solid #2D3340;min-width:60px;padding:0 8px;',
+  };
+
+  // --- Build HTML ---
+  var h = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>好习惯周报</title></head><body style="'+css.page+'">';
+
+  // Header
+  h += '<h1 style="'+css.h1+'">🌟 好习惯周报</h1>';
+  h += '<div style="'+css.sub+'">'+savedName+' · 第'+wkNum+'周 · '+fmtDate(dates[0])+' — '+fmtDate(dates[6])+' · '+getModeLabel(mode)+'</div>';
+
+  // Stats
+  var totalDone = 0, totalAll = 0;
+  getActiveHabits().forEach(function(hb) {
+    for (var d = 0; d < 7; d++) {
+      if (!isDayApplicable(hb, dates[d])) continue;
+      totalAll++; if (getDayStatus(hb, dates[d]) === '✓') totalDone++;
+    }
+  });
+  var totalExp = getChildMembers().reduce(function(s,m){return s+getTotalExp(m.id);},0);
+  var totalCoin = getChildMembers().reduce(function(s,m){return s+getCoinBalance(m.id);},0);
+  h += '<div style="'+css.statRow+'">';
+  h += '<div style="'+css.statBox+'"><div style="'+css.statVal+'color:#1FAE9F;">'+totalDone+'/'+totalAll+'</div><div style="'+css.statLbl+'">本周完成</div></div>';
+  h += '<div style="'+css.statBox+'"><div style="'+css.statVal+'">'+totalExp+'</div><div style="'+css.statLbl+'">总EXP</div></div>';
+  h += '<div style="'+css.statBox+'"><div style="'+css.statVal+'color:#C89D4A;">'+totalCoin+'</div><div style="'+css.statLbl+'">可用金币</div></div>';
+  h += '</div>';
+
+  // Table
+  h += '<table style="'+css.table+'"><thead><tr>';
+  h += '<th style="'+css.th+'">习惯</th>';
+  h += '<th style="'+css.th+'">细则</th>';
+  h += '<th style="'+css.th+'">连续</th>';
+  h += '<th style="'+css.th+'">分值</th>';
+  for (var d = 0; d < 7; d++) h += '<th style="'+css.th+'">周'+DOW[d]+'<br>'+dates[d].getDate()+'日</th>';
+  h += '</tr></thead><tbody>';
+
+  var memberGroups = {};
+  getActiveHabits().forEach(function(hb){var m=hb.ownerMemberId;if(!memberGroups[m])memberGroups[m]=[];memberGroups[m].push(hb);});
+  Object.entries(memberGroups).forEach(function(entry) {
+    var mid = entry[0], habits = entry[1];
+    h += '<tr><td colspan="'+(11)+'" style="'+css.memberRow+'">'+getMemberName(mid)+'</td></tr>';
+    habits.forEach(function(hb) {
+      var sc = getStreakCount(hb.id);
+      var ruleText = (mode==='vacation'&&hb.ruleVacation)?hb.ruleVacation:(hb.ruleText||'');
+      h += '<tr>';
+      h += '<td style="'+css.td+';'+css.tdName+'">'+(hb.emoji||'')+' '+hb.title+'</td>';
+      h += '<td style="'+css.td+';'+css.tdRule+'">'+(ruleText||'—')+'</td>';
+      h += '<td style="'+css.td+';'+css.tdStreak+'"><b>'+(sc>0?sc:'0')+'</b>/'+hb.streakNeed+'</td>';
+      h += '<td style="'+css.td+';'+css.tdPts+'">E'+hb.expValue+'<br>C'+hb.coinValue+'</td>';
+      for (var d = 0; d < 7; d++) {
+        var st = getDayStatus(hb, dates[d]);
+        var dot, dotStyle = css.td;
+        if (st === '✓') { dot = '✔'; dotStyle += css.dotDone; }
+        else if (st === '✗') { dot = '✗'; dotStyle += css.dotMiss; }
+        else if (st === 'na') { dot = '—'; dotStyle += css.dotNA; }
+        else { dot = '○'; dotStyle += css.dotPend; }
+        h += '<td style="'+dotStyle+'">'+dot+'</td>';
       }
+      h += '</tr>';
     });
   });
-  document.getElementById('pTableBody').innerHTML = html;
-  // Bind events
-  document.querySelectorAll('.p-day-cell:not(.na)').forEach(cell => { cell.addEventListener('click', function() {
-    const hId = this.dataset.habit; const dayIdx = parseInt(this.dataset.day); const ds = this.dataset.date;
-    if (ds > today) { showToast('⏳ The day is in the future!'); return; }
-    const habit = getActiveHabits().find(h => h.id === hId); if (!habit || !isDayApplicable(habit, dates[dayIdx])) return;
-    const isToday = ds === today;
-    function doCycle() { cycleStatus(habit, dates[dayIdx]); recomputeStreaks(); renderPrintableWeek(); showToast('✅'); }
-    if (isToday) { doCycle(); } else { dayLockCheck(dateStr, '修改历史打卡', doCycle); }
-  }); });
+  h += '</tbody></table>';
+
+  // Legend & sign
+  h += '<div style="'+css.legend+'"><span>✔ 已完成</span><span>✗ 未完成</span><span>○ 待完成</span><span>— 不适用</span></div>';
+  h += '<div style="'+css.sign+'"><span>宝贝签字：<span style="'+css.signLine+'"></span></span><span>家长签字：<span style="'+css.signLine+'"></span></span></div>';
+  h += '</body></html>';
+
+  document.getElementById('printableView').innerHTML = h;
 }
 
 
@@ -3210,20 +3266,9 @@ function init() {
   document.getElementById('btnPrintView').addEventListener('click', function() {
     if (!currentWeek) currentWeek = getMonday(new Date());
     renderPrintableWeek();
-    const pv = document.getElementById('printableView');
-    pv.style.display = 'block';
-    pv.style.position = 'fixed';
-    pv.style.inset = '0';
-    pv.style.zIndex = '500';
-    pv.style.overflow = 'auto';
-    pv.style.background = '#fff';
-    // Add close button
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕ 关闭';
-    closeBtn.style.cssText = 'position:fixed;top:10px;right:10px;z-index:501;padding:8px 16px;border:none;border-radius:8px;background:var(--ink);color:#fff;font-size:14px;cursor:pointer;';
-    closeBtn.onclick = function() { pv.style.display = 'none'; closeBtn.remove(); };
-    document.body.appendChild(closeBtn);
-    showToast('🖨️ 可用浏览器打印功能导出');
+    var w = window.open('about:blank', '_blank');
+    w.document.write(document.getElementById('printableView').innerHTML);
+    w.document.close();
   });
   document.getElementById('btnSettingsSave').addEventListener('click', function() {
     const ranges = [];
