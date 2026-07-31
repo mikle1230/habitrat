@@ -93,6 +93,66 @@ function equipOutfit(memberId, category, itemId) {
   renderMascotSvg(memberId, 'dressupMascotSvg');
 }
 
+// ================================================================
+// 游戏规则说明（想改规则内容，直接改这里的文字即可）
+// 每个 section 是一个板块：emoji+标题+多条规则+可选的温馨提示
+// ================================================================
+const GAME_RULES = [
+  {
+    emoji: '📅',
+    title: '每天做什么',
+    lines: [
+      '每天打开「任务」页，把今天该做的事情完成，点一下就打上卡。',
+      '每个习惯有三种状态：<b>✅ 完成</b>、<b>✗ 没完成</b>、<b>○ 还没做</b>。',
+      '完成了就获得经验（EXP）和金币（💰），没完成不计分。'
+    ]
+  },
+  {
+    emoji: '⭐',
+    title: 'EXP 和升级',
+    lines: [
+      '经验攒够了就会<b>升级</b>，等级越高，称号越厉害。',
+      '每升一级，就能解锁新的装扮、伙伴和场景，把 Ratty 的家打扮得越来越漂亮。'
+    ]
+  },
+  {
+    emoji: '💰',
+    title: '金币和奖励',
+    lines: [
+      '金币可以用来在「商店」里兑换奖励。',
+      '奖励是爸爸妈妈和你一起商量好的，兑换前记得先问问哦。'
+    ],
+    tip: '金币花掉了还能再赚，每天坚持打卡就有金币啦！'
+  },
+  {
+    emoji: '🔥',
+    title: '连续打卡',
+    lines: [
+      '每天<b>全部完成</b>所有习惯，就算「全勤」一天。',
+      '连续全勤的天数越多，解锁的奖励越丰厚。',
+      '如果有一天没完成，连续天数就会从头开始算。'
+    ],
+    tip: '不用怕断掉，重新开始也是一种坚持！'
+  },
+  {
+    emoji: '🔒',
+    title: '每天结束后自动锁定',
+    lines: [
+      '每天到 <b>23:59</b>，当天内容会自动锁定，不能再改。',
+      '这样能保证记录是真实的，避免不小心误操作。',
+      '如果当天真的需要修改，可以让爸爸妈妈用 PIN 码解锁。'
+    ]
+  },
+  {
+    emoji: '🏖️',
+    title: '节假日和寒暑假',
+    lines: [
+      '在假期里，有些习惯的时间要求会放松一点。',
+      '寒暑假的时间段会在「设置」里由爸爸妈妈配置，当天顶部会有提示。'
+    ]
+  }
+];
+
 // 1. Legacy Data
 const HABITS_LEGACY = [
   { id:'mom_bf', personKey:'xiaomei', emoji:'🥣', name:'妈妈吃早饭', pts:10, streakNeed:3, rule:'8:30前', ruleVacation:'9:00前', applicable:'all' },
@@ -1711,6 +1771,30 @@ function switchScene(scene) {
   if (zhBR) zhBR.style.display = zhShow;
 }
 
+function openRulesModal() {
+  var body = document.getElementById('rulesModalBody');
+  var overlay = document.getElementById('rulesOverlay');
+  if (!body || !overlay) return;
+  var html = '';
+  GAME_RULES.forEach(function(section) {
+    html += '<div class="rule-section">'
+      + '<div class="rule-title">' + section.emoji + ' ' + section.title + '</div>';
+    section.lines.forEach(function(line) {
+      html += '<div class="rule-line">' + line + '</div>';
+    });
+    if (section.tip) {
+      html += '<div class="rule-tip">💡 ' + section.tip + '</div>';
+    }
+    html += '</div>';
+  });
+  body.innerHTML = html;
+  overlay.classList.add('show');
+}
+function closeRulesModal() {
+  var overlay = document.getElementById('rulesOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
 let _dressupOpen = false;
 function toggleDressupPanel() {
   _dressupOpen = !_dressupOpen;
@@ -2196,8 +2280,11 @@ async function toggleTodayLock() {
   if (locked) {
     // 解锁需要 PIN
     if (!parentPin) { showToast('⚠️ 请先在设置中设定 PIN'); return; }
-    var p = await showPinModal({ title: '🔐 输入 PIN 解锁当天' });
-    if (!p || p !== parentPin) { if (p) showToast('❌ PIN 不正确'); return; }
+    var p = await showPinModal({
+      title: '🔐 输入 PIN 解锁当天',
+      validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+    });
+    if (!p) return;
     delete lockedDates[todayStr]; saveData(); updateLockButton();
     showToast('🔓 已解锁，可以修改');
   } else {
@@ -2220,8 +2307,11 @@ function dayLockCheck(dateStr, action, callback) {
 }
 async function unlockWithPin(ds) {
   if (!parentPin) { showToast('⚠️ 请在设置中设定 PIN'); return; }
-  var p = await showPinModal({ title: '🔐 输入 PIN 解锁编辑' });
-  if (!p || p !== parentPin) { if (p) showToast('❌ PIN 不正确'); return; }
+  var p = await showPinModal({
+    title: '🔐 输入 PIN 解锁编辑',
+    validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+  });
+  if (!p) return;
   unlockedForEdit[ds] = true;
   showDayDetail(new Date(ds + 'T00:00:00'));
   showToast('🔓 已临时解锁，可编辑');
@@ -2260,9 +2350,11 @@ function closeConfirm(result) {
 }
 // 确认弹窗按钮事件（在 init 中绑定）
 let _pinResolve = null, _pinValue = '', _pinMode = '';
+let _pinValidate = null;
 function showPinModal(options) {
   return new Promise(resolve => {
     _pinResolve = resolve; _pinValue = ''; _pinMode = options.mode || 'unlock';
+    _pinValidate = options.validate || null;
     document.getElementById('pinTitle').textContent = options.title || '🔐 输入 PIN';
     document.getElementById('pinError').textContent = '';
     document.querySelectorAll('.pin-dot').forEach(d => d.className = 'pin-dot');
@@ -2271,6 +2363,7 @@ function showPinModal(options) {
 }
 function closePinModal(result) {
   document.getElementById('pinOverlay').classList.remove('show');
+  _pinValidate = null;
   if (_pinResolve) { _pinResolve(result); _pinResolve = null; }
 }
 function handlePinKey(key) {
@@ -2280,7 +2373,11 @@ function handlePinKey(key) {
   dots[_pinValue.length - 1].className = 'pin-dot filled';
   document.getElementById('pinError').textContent = '';
   if (_pinValue.length === 4) {
-    // 输入完成，返回结果
+    // 校验回调：返回错误文字则留在弹窗内报错并重置，返回 null 则关闭
+    if (_pinValidate) {
+      var err = _pinValidate(_pinValue);
+      if (err) { handlePinError(err); return; }
+    }
     closePinModal(_pinValue);
   }
 }
@@ -2506,7 +2603,9 @@ function updateTabPill() {
   pill.style.width = iw + 'px';
 }
 
+let settingsUnlocked = false;
 function switchView(view) {
+  if (view !== 'settings') settingsUnlocked = false;
   currentView = view;
   document.querySelectorAll('#homeView,#growthView,#shopView,#settingsView,#analyticsView').forEach(el => el.style.display = 'none');
   document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
@@ -2527,6 +2626,7 @@ function switchView(view) {
   } else if (view === 'settings') {
     document.getElementById('settingsView').style.display = 'block';
     document.querySelector('.tab[data-tab="settings"]').classList.add('active');
+    applySettingsLock();
     renderSettings();
   } else if (view === 'analytics') {
     document.getElementById('analyticsView').style.display = 'block';
@@ -2535,6 +2635,31 @@ function switchView(view) {
   }
   updateHeader();
   updateTabPill();
+}
+/** 根据 PIN 状态决定设置页是否显示锁屏 */
+function applySettingsLock() {
+  var lock = document.getElementById('settingsLock');
+  var content = document.getElementById('settingsContent');
+  if (!lock || !content) return;
+  if (!parentPin || settingsUnlocked) {
+    lock.classList.remove('show');
+    content.style.display = 'block';
+  } else {
+    lock.classList.add('show');
+    content.style.display = 'none';
+  }
+}
+/** 输入 PIN 解锁设置页 */
+async function unlockSettings() {
+  if (!parentPin) { settingsUnlocked = true; applySettingsLock(); showToast('✅ 设置已解锁'); return; }
+  var p = await showPinModal({
+    title: '🔐 输入 PIN 解锁设置',
+    validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+  });
+  if (!p) return;
+  settingsUnlocked = true;
+  applySettingsLock();
+  showToast('🔓 设置已解锁');
 }
 function goToWeek(date) {
   currentWeek = getMonday(date); currentHomeTab = 'week';
@@ -2745,24 +2870,44 @@ function refreshCurrentView() {
 }
 
 // ========== Settings ==========
+/** 自动保存假期配置：读取设置页中的假期行并保存 */
+function saveVacationConfig(showTip) {
+  const ranges = [];
+  document.querySelectorAll('#settingsView .vacation-row').forEach(row => {
+    const nameEl = row.querySelector('.v-name'); const startEl = row.querySelector('.v-start'); const endEl = row.querySelector('.v-end');
+    if (nameEl && startEl && endEl && startEl.value && endEl.value) {
+      ranges.push({ name: nameEl.tagName === 'INPUT' ? nameEl.value : nameEl.textContent, start: startEl.value, end: endEl.value });
+    }
+  });
+  dateConfig.vacationRanges = ranges;
+  saveData();
+  updateHeader();
+  if (showTip !== false) showToast('✅ 已自动保存');
+}
 function renderSettings() {
   // Child name
   var cnInput = document.getElementById('ssChildName');
   if (cnInput) cnInput.value = (localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')) || '小美';
-  // Vacation
+  // Vacation（编辑后自动保存）
   const container = document.getElementById('vacationList'); container.innerHTML = '';
   if (dateConfig.vacationRanges.length === 0) { dateConfig.vacationRanges = [{ name:'暑假',start:'2026-07-01',end:'2026-08-31'},{ name:'寒假',start:'2027-01-18',end:'2027-02-28'}]; }
+  function bindVacationRow(row) {
+    row.querySelectorAll('.v-name, .v-start, .v-end').forEach(function(input) {
+      input.addEventListener('change', function() { saveVacationConfig(); });
+    });
+    row.querySelector('.del-vacation').addEventListener('click', function() { row.remove(); saveVacationConfig(); });
+  }
   dateConfig.vacationRanges.forEach((r, i) => {
     const row = document.createElement('div'); row.className = 'vacation-row';
     row.innerHTML = '<span class="v-name">'+r.name+'</span><input type="date" class="v-start" value="'+r.start+'"><span>至</span><input type="date" class="v-end" value="'+r.end+'"><button class="del-vacation">✕</button>';
     container.appendChild(row);
-    row.querySelector('.del-vacation').addEventListener('click', function() { row.remove(); });
+    bindVacationRow(row);
   });
   document.getElementById('addVacation').onclick = function() {
     const row = document.createElement('div'); row.className = 'vacation-row';
     row.innerHTML = '<input class="v-name" value="自定义假期" style="width:80px;border:2px solid var(--paper-deep);border-radius:8px;padding:6px;font-size:13px;"><input type="date" class="v-start" value=""><span>至</span><input type="date" class="v-end" value=""><button class="del-vacation">✕</button>';
     container.appendChild(row);
-    row.querySelector('.del-vacation').addEventListener('click', function() { row.remove(); });
+    bindVacationRow(row);
   };
   // Members
   renderMemberSettings();
@@ -2799,8 +2944,37 @@ function renderSettings() {
     ? '<span style="font-size:13px;">当前 PIN：<b>●●●●</b></span> <button id="ssChangePin" class="add-btn" style="padding:4px 12px;border-style:solid;">修改</button>'
     : '<span style="font-size:13px;color:var(--amber-deep);">⚠️ 未设置 PIN — 锁定当天后需 PIN 才能解锁编辑</span><br><button id="ssSetPin" style="margin-top:6px;font-size:12px;padding:6px 16px;border:2px solid var(--amber);border-radius:8px;background:var(--nav-active-bg);color:var(--ink);cursor:pointer;font-weight:600;">🔐 设置 PIN</button>';
   setTimeout(() => {
-    const setPinBtn = document.getElementById('ssSetPin'); if (setPinBtn) setPinBtn.onclick = async function() { var p = await showPinModal({ title: '🔐 设置 4 位 PIN' }); if (p && /^\d{4}$/.test(p)) { parentPin = p; saveData(); showToast('✅ PIN 已设置'); renderSettings(); } else if (p) showToast('⚠️ PIN 必须是 4 位数字'); };
-    const changePinBtn = document.getElementById('ssChangePin'); if (changePinBtn) changePinBtn.onclick = async function() { var old = await showPinModal({ title: '🔐 请输入当前 PIN' }); if (old !== parentPin) { if (old) showToast('❌ PIN 不正确'); return; } var p1 = await showPinModal({ title: '🔐 请输入新 PIN（4位数字）' }); if (!p1 || !/^\d{4}$/.test(p1)) { if (p1) showToast('⚠️ PIN 必须是 4 位数字'); return; } parentPin = p1; saveData(); showToast('✅ PIN 已更新'); renderSettings(); };
+    const setPinBtn = document.getElementById('ssSetPin'); if (setPinBtn) setPinBtn.onclick = async function() {
+      var p = await showPinModal({
+        title: '🔐 设置 4 位 PIN',
+        validate: function(v) { return /^\d{4}$/.test(v) ? null : '⚠️ PIN 必须是 4 位数字'; }
+      });
+      if (!p) return;
+      var p2 = await showPinModal({
+        title: '🔐 请再次输入 PIN 确认',
+        validate: function(v) { return v === p ? null : '❌ 两次输入不一致，请重试'; }
+      });
+      if (!p2) return;
+      parentPin = p; saveData(); showToast('✅ PIN 已设置'); renderSettings();
+    };
+    const changePinBtn = document.getElementById('ssChangePin'); if (changePinBtn) changePinBtn.onclick = async function() {
+      var old = await showPinModal({
+        title: '🔐 请输入当前 PIN',
+        validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+      });
+      if (!old) return;
+      var p1 = await showPinModal({
+        title: '🔐 请输入新 PIN（4位数字）',
+        validate: function(v) { return /^\d{4}$/.test(v) ? null : '⚠️ PIN 必须是 4 位数字'; }
+      });
+      if (!p1) return;
+      var p1b = await showPinModal({
+        title: '🔐 请再次输入新 PIN 确认',
+        validate: function(v) { return v === p1 ? null : '❌ 两次输入不一致，请重试'; }
+      });
+      if (!p1b) return;
+      parentPin = p1; saveData(); showToast('✅ PIN 已更新'); renderSettings();
+    };
   }, 100);
 }
 function renderMemberSettings() {
@@ -3451,18 +3625,6 @@ function init() {
     var w = window.open('about:blank', '_blank');
     w.document.write(document.getElementById('printableView').innerHTML);
     w.document.close();
-  });
-  document.getElementById('btnSettingsSave').addEventListener('click', function() {
-    const ranges = [];
-    document.querySelectorAll('#settingsView .vacation-row').forEach(row => {
-      const nameEl = row.querySelector('.v-name'); const startEl = row.querySelector('.v-start'); const endEl = row.querySelector('.v-end');
-      if (nameEl && startEl && endEl && startEl.value && endEl.value) {
-        ranges.push({ name: nameEl.tagName === 'INPUT' ? nameEl.value : nameEl.textContent, start: startEl.value, end: endEl.value });
-      }
-    });
-    dateConfig.vacationRanges = ranges;
-    saveData(); showToast('✅ 设置已保存'); updateHeader();
-    if (currentView === 'home') renderHomeView();
   });
   // Child name save
   var ssSaveCN = document.getElementById('ssSaveChildName'); if (ssSaveCN) ssSaveCN.addEventListener('click', function() {
