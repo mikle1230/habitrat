@@ -256,6 +256,7 @@
       <div class="sl-title">设置已被锁定</div>
       <div class="sl-sub">这里是爸爸妈妈管理的区域，输入 PIN 码才能查看</div>
       <button class="sl-btn" onclick="unlockSettings()">🔐 输入 PIN 解锁</button>
+      <div class="sl-forgot" onclick="openForgotPin()">忘记 PIN 了？</div>
     </div>
     <div id="settingsContent">
     <!-- 1. 同步与安全 -->
@@ -410,6 +411,39 @@
     </div>
     <div class="modal-actions">
       <button class="modal-btn modal-cancel" id="pinCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 密保问题设置弹窗 -->
+<div class="modal-overlay" id="secQOverlay" onclick="if(event.target===this) closeSecQModal()">
+  <div class="modal-card" style="max-width:320px;">
+    <div class="modal-msg" style="font-size:16px;font-weight:700;margin-bottom:14px;">❓ 设置密保问题</div>
+    <div class="rule-tip" style="margin-bottom:12px;">忘记 PIN 时，答对密保问题就能重新设置。答案最好选只有你知道的。</div>
+    <div class="ss-field" style="margin-bottom:10px;">
+      <input id="secQuestion" placeholder="输入问题，如：我的小名是？" style="width:100%;">
+    </div>
+    <div class="ss-field" style="margin-bottom:16px;">
+      <input id="secAnswer" placeholder="输入答案" style="width:100%;">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-cancel" id="secQSkip">跳过</button>
+      <button class="modal-btn modal-ok" id="secQSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 忘记 PIN 验证弹窗 -->
+<div class="modal-overlay" id="forgotPinOverlay" onclick="if(event.target===this) closeForgotPin()">
+  <div class="modal-card" style="max-width:320px;">
+    <div class="modal-msg" style="font-size:16px;font-weight:700;margin-bottom:14px;">🔓 重置 PIN</div>
+    <div id="forgotPinQuestion" class="rule-tip" style="margin-bottom:12px;"></div>
+    <div class="ss-field" style="margin-bottom:16px;">
+      <input id="forgotPinAnswer" placeholder="输入答案" style="width:100%;">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-cancel" id="forgotPinCancel">取消</button>
+      <button class="modal-btn modal-ok" id="forgotPinConfirm">验证</button>
     </div>
   </div>
 </div>

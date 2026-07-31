@@ -200,6 +200,8 @@ const state = {
   lastSyncTime: null,
   lockedDates: {},
   parentPin: '',
+  securityQuestion: '',
+  securityAnswer: '',
   unlockedForEdit: {},
   // 导航
   currentView: 'week',
@@ -211,19 +213,20 @@ const state = {
 // 导出为顶层变量别名（对象/数组共享引用，原语值在 saveData 前同步回 state）
 let family, members, habitTemplates, rewardItems, _levelConfig, selectedMemberId, _lastKnownLevels, roomState;
 let checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog;
-let syncStatus, _dataVersion, familyCode, lastSyncTime, lockedDates, parentPin, unlockedForEdit;
+let syncStatus, _dataVersion, familyCode, lastSyncTime, lockedDates, parentPin, securityQuestion, securityAnswer, unlockedForEdit;
 let currentView, currentHomeTab, currentMonth, currentWeek, currentDay;
 /** 将所有 state 属性复制到顶层变量（对象保持引用传递） */
 function _syncFromState() {
   ({ family, members, habitTemplates, rewardItems, _levelConfig, selectedMemberId, _lastKnownLevels, roomState,
      checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog,
-     syncStatus, _dataVersion, familyCode, lastSyncTime, lockedDates, parentPin, unlockedForEdit,
+     syncStatus, _dataVersion, familyCode, lastSyncTime, lockedDates, parentPin, securityQuestion, securityAnswer, unlockedForEdit,
      currentView, currentHomeTab, currentMonth, currentWeek, currentDay } = state);
 }
 /** 将原语值从顶层变量同步回 state（对象/数组已共享引用，无需回写） */
 function _syncToState() {
   state._dataVersion = _dataVersion; state.familyCode = familyCode; state.syncStatus = syncStatus;
-  state.parentPin = parentPin; state.selectedMemberId = selectedMemberId;
+  state.parentPin = parentPin; state.securityQuestion = securityQuestion; state.securityAnswer = securityAnswer;
+  state.selectedMemberId = selectedMemberId;
   state.currentView = currentView; state.currentHomeTab = currentHomeTab;
   state.currentMonth = currentMonth; state.currentWeek = currentWeek; state.currentDay = currentDay;
   state.lastSyncTime = lastSyncTime;
@@ -458,6 +461,8 @@ function loadData() {
       familyCode = d.familyCode || '';
       lockedDates = d.lockedDates || {};
       parentPin = d.parentPin || '';
+      securityQuestion = d.securityQuestion || '';
+      securityAnswer = d.securityAnswer || '';
       family = d.family || null;
       members = d.members || [];
       habitTemplates = d.habitTemplates || [];
@@ -576,7 +581,7 @@ function saveData(skipSync) {
   state._dataVersion = _dataVersion;
   localStorage.setItem('habitrat:v4', JSON.stringify({
     checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog,
-    familyCode, parentPin, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, _schemaVersion: 2, _dataVersion,
+    familyCode, parentPin, securityQuestion, securityAnswer, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, _schemaVersion: 2, _dataVersion,
   }));
   if (!skipSync) debounceSyncToServer();
 }
@@ -2101,7 +2106,7 @@ function renderPointsLog(monthKey) {
 // ========== Sync ==========
 function getSyncData() {
   return { checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog,
-    familyCode, parentPin, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, _schemaVersion: 2, _dataVersion };
+    familyCode, parentPin, securityQuestion, securityAnswer, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, _schemaVersion: 2, _dataVersion };
 }
 let syncTimer = null, syncPending = false, syncPollInterval = null;
 function debounceSyncToServer() { clearTimeout(syncTimer); syncPending = true; syncTimer = setTimeout(() => { syncPending = false; syncToServer(); }, 500); }
@@ -2139,6 +2144,7 @@ async function loadFromServer() {
       if (r.dateConfig) dateConfig = r.dateConfig;
       if (r.customItems) customItems = r.customItems; if (r.operationLog) operationLog = r.operationLog;
       if (r.familyCode) familyCode = r.familyCode; if (r.parentPin !== undefined) parentPin = r.parentPin;
+      if (r.securityQuestion !== undefined) securityQuestion = r.securityQuestion; if (r.securityAnswer !== undefined) securityAnswer = r.securityAnswer;
       if (r.lockedDates) lockedDates = r.lockedDates;
       if (r.family) family = r.family; if (r.members) members = r.members;
       if (r.habitTemplates) habitTemplates = r.habitTemplates; if (r.rewardItems) rewardItems = r.rewardItems;
@@ -2264,6 +2270,8 @@ async function importBackup(file) {
     customItems = data.customItems || []; operationLog = data.operationLog || [];
     if (data.familyCode) { familyCode = data.familyCode; localStorage.setItem('habitrat:familyCode', familyCode); }
     if (data.parentPin !== undefined) parentPin = data.parentPin;
+    if (data.securityQuestion !== undefined) securityQuestion = data.securityQuestion;
+    if (data.securityAnswer !== undefined) securityAnswer = data.securityAnswer;
     if (data.family) family = data.family; if (data.members) members = data.members;
     if (data.habitTemplates) habitTemplates = data.habitTemplates; if (data.rewardItems) rewardItems = data.rewardItems;
     if (data._levelConfig) _levelConfig = data._levelConfig;
@@ -2351,6 +2359,79 @@ function closeConfirm(result) {
 // 确认弹窗按钮事件（在 init 中绑定）
 let _pinResolve = null, _pinValue = '', _pinMode = '';
 let _pinValidate = null;
+let _secQOnSave = null;
+
+// ===== 密保问题 =====
+function openSecQModal(onSave) {
+  _secQOnSave = onSave || null;
+  var overlay = document.getElementById('secQOverlay');
+  if (!overlay) return;
+  document.getElementById('secQuestion').value = securityQuestion || '';
+  document.getElementById('secAnswer').value = '';
+  overlay.classList.add('show');
+  setTimeout(function() { var q = document.getElementById('secQuestion'); if (q) q.focus(); }, 50);
+}
+function saveSecQ() {
+  var q = document.getElementById('secQuestion').value.trim();
+  var a = document.getElementById('secAnswer').value.trim();
+  if (!q) { showToast('⚠️ 请输入密保问题'); return; }
+  if (!a) { showToast('⚠️ 请输入答案'); return; }
+  securityQuestion = q;
+  securityAnswer = a;
+  saveData();
+  document.getElementById('secQOverlay').classList.remove('show');
+  showToast('✅ 密保问题已保存');
+  if (_secQOnSave) { var cb = _secQOnSave; _secQOnSave = null; cb(); }
+}
+function closeSecQModal() {
+  var overlay = document.getElementById('secQOverlay');
+  if (overlay) overlay.classList.remove('show');
+  _secQOnSave = null;
+}
+
+// ===== 忘记 PIN 重置 =====
+function openForgotPin() {
+  var overlay = document.getElementById('forgotPinOverlay');
+  if (!overlay) return;
+  var qEl = document.getElementById('forgotPinQuestion');
+  if (securityQuestion) {
+    qEl.textContent = '❓ ' + securityQuestion;
+    document.getElementById('forgotPinAnswer').value = '';
+    overlay.classList.add('show');
+    setTimeout(function() { var a = document.getElementById('forgotPinAnswer'); if (a) a.focus(); }, 50);
+  } else {
+    // 没设密保问题，无法找回
+    showToast('⚠️ 未设置密保问题，无法找回 PIN');
+  }
+}
+function verifyForgotPin() {
+  var ans = document.getElementById('forgotPinAnswer').value.trim();
+  if (!securityAnswer || ans !== securityAnswer) { showToast('❌ 答案不正确'); return; }
+  document.getElementById('forgotPinOverlay').classList.remove('show');
+  showToast('✅ 验证通过，请设置新 PIN');
+  // 复用设置 PIN 流程
+  (async function() {
+    var p = await showPinModal({
+      title: '🔐 设置新 PIN',
+      validate: function(v) { return /^\d{4}$/.test(v) ? null : '⚠️ PIN 必须是 4 位数字'; }
+    });
+    if (!p) return;
+    var p2 = await showPinModal({
+      title: '🔐 请再次输入 PIN 确认',
+      validate: function(v) { return v === p ? null : '❌ 两次输入不一致，请重试'; }
+    });
+    if (!p2) return;
+    parentPin = p; saveData(); showToast('✅ PIN 已重置');
+    settingsUnlocked = true;
+    applySettingsLock();
+    renderSettings();
+  })();
+}
+function closeForgotPin() {
+  var overlay = document.getElementById('forgotPinOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
 function showPinModal(options) {
   return new Promise(resolve => {
     _pinResolve = resolve; _pinValue = ''; _pinMode = options.mode || 'unlock';
@@ -2940,8 +3021,11 @@ function renderSettings() {
     };
   }, 100);
   // PIN
+  var secQStatus = securityQuestion
+    ? '密保问题：<b>' + securityQuestion + '</b>'
+    : '⚠️ 未设置密保问题 — 忘记 PIN 时将无法找回';
   document.getElementById('ssPinInfo').innerHTML = parentPin
-    ? '<span style="font-size:13px;">当前 PIN：<b>●●●●</b></span> <button id="ssChangePin" class="add-btn" style="padding:4px 12px;border-style:solid;">修改</button>'
+    ? '<span style="font-size:13px;">当前 PIN：<b>●●●●</b></span> <button id="ssChangePin" class="add-btn" style="padding:4px 12px;border-style:solid;">修改</button><br><span style="font-size:12px;color:var(--ink-soft);margin-top:4px;display:inline-block;">' + secQStatus + '</span> <button id="ssEditSecQ" class="add-btn" style="padding:4px 12px;border-style:solid;">修改密保</button>'
     : '<span style="font-size:13px;color:var(--amber-deep);">⚠️ 未设置 PIN — 锁定当天后需 PIN 才能解锁编辑</span><br><button id="ssSetPin" style="margin-top:6px;font-size:12px;padding:6px 16px;border:2px solid var(--amber);border-radius:8px;background:var(--nav-active-bg);color:var(--ink);cursor:pointer;font-weight:600;">🔐 设置 PIN</button>';
   setTimeout(() => {
     const setPinBtn = document.getElementById('ssSetPin'); if (setPinBtn) setPinBtn.onclick = async function() {
@@ -2956,6 +3040,10 @@ function renderSettings() {
       });
       if (!p2) return;
       parentPin = p; saveData(); showToast('✅ PIN 已设置'); renderSettings();
+      // 引导设置密保问题（用于忘记 PIN 时找回）
+      if (!securityQuestion) {
+        setTimeout(function() { openSecQModal(); }, 400);
+      }
     };
     const changePinBtn = document.getElementById('ssChangePin'); if (changePinBtn) changePinBtn.onclick = async function() {
       var old = await showPinModal({
@@ -2975,6 +3063,7 @@ function renderSettings() {
       if (!p1b) return;
       parentPin = p1; saveData(); showToast('✅ PIN 已更新'); renderSettings();
     };
+    const editSecQBtn = document.getElementById('ssEditSecQ'); if (editSecQBtn) editSecQBtn.onclick = function() { openSecQModal(); };
   }, 100);
 }
 function renderMemberSettings() {
@@ -3669,6 +3758,12 @@ function init() {
   });
   document.getElementById('pinDel').addEventListener('click', handlePinDel);
   document.getElementById('pinCancel').addEventListener('click', function() { closePinModal(null); });
+  // 密保问题弹窗
+  var secQSave = document.getElementById('secQSave'); if (secQSave) secQSave.addEventListener('click', saveSecQ);
+  var secQSkip = document.getElementById('secQSkip'); if (secQSkip) secQSkip.addEventListener('click', closeSecQModal);
+  // 忘记 PIN 弹窗
+  var forgotConfirm = document.getElementById('forgotPinConfirm'); if (forgotConfirm) forgotConfirm.addEventListener('click', verifyForgotPin);
+  var forgotCancel = document.getElementById('forgotPinCancel'); if (forgotCancel) forgotCancel.addEventListener('click', closeForgotPin);
   // No responsive layout - mobile only
 
   // URL invite detection
