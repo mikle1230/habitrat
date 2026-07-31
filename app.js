@@ -1433,6 +1433,7 @@ function renderGrowthView() {
   const prog = getExpProgress(selectedMemberId);
   renderScene(selectedMemberId);
   switchScene('main'); // reset to main view
+  setTimeout(function() { var b = document.getElementById('btnSceneEditor'); if (b) b.style.display = 'block'; }, 300);
   // 收藏品已集成到场景中（徽章墙），隐藏旧网格
   const gcGrid = document.getElementById('gcGrid');
   if (gcGrid) gcGrid.innerHTML = '';
@@ -1499,24 +1500,117 @@ function renderGrowthView() {
 
 // ========== 场景切换 ==========
 var currentScene = 'main';
+// ========== 场景热区编辑器（?editor=1 启用） ==========
+var sceneEditorActive = false;
+var editorStartX, editorStartY, editorRect;
+
+// Show editor button (called after scene renders)
+setTimeout(function() {
+  var btn = document.getElementById('btnSceneEditor');
+  if (btn) btn.style.display = 'block';
+}, 500);
+
+function initSceneEditor() {
+  var canvas = document.getElementById('sceneEditorCanvas');
+  var output = document.getElementById('sceneEditorOutput');
+  var bg = document.getElementById('sceneBgImg');
+  var btn = document.getElementById('btnSceneEditor');
+  if (!canvas || !bg) return;
+  if (sceneEditorActive) {
+    // Exit edit mode
+    sceneEditorActive = false;
+    canvas.style.display = 'none';
+    output.style.display = 'none';
+    if (btn) { btn.textContent = '✎ 编辑热区'; btn.style.background = 'rgba(45,51,64,.8)'; btn.style.color = 'var(--gold)'; }
+    return;
+  }
+  sceneEditorActive = true;
+  canvas.style.display = 'block';
+  output.style.display = 'block';
+  canvas.width = bg.clientWidth;
+  canvas.height = bg.clientHeight;
+  if (btn) { btn.textContent = '退出编辑'; btn.style.background = 'rgba(200,157,74,.9)'; btn.style.color = '#2D3340'; }
+  var ctx = canvas.getContext('2d');
+
+  canvas.onmousedown = function(e) {
+    e.stopPropagation();
+    var rect = canvas.getBoundingClientRect();
+    editorStartX = (e.clientX - rect.left) / rect.width * 100;
+    editorStartY = (e.clientY - rect.top) / rect.height * 100;
+    editorRect = null;
+  };
+  canvas.onmousemove = function(e) {
+    if (editorStartX === undefined) return;
+    var rect = canvas.getBoundingClientRect();
+    var x = (e.clientX - rect.left) / rect.width * 100;
+    var y = (e.clientY - rect.top) / rect.height * 100;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(200,157,74,0.3)';
+    ctx.strokeStyle = '#C89D4A';
+    ctx.lineWidth = 2;
+    var rx = Math.min(editorStartX, x) / 100 * canvas.width;
+    var ry = Math.min(editorStartY, y) / 100 * canvas.height;
+    var rw = Math.abs(x - editorStartX) / 100 * canvas.width;
+    var rh = Math.abs(y - editorStartY) / 100 * canvas.height;
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeRect(rx, ry, rw, rh);
+    editorRect = {
+      x: Math.round(Math.min(editorStartX, x)),
+      y: Math.round(Math.min(editorStartY, y)),
+      w: Math.round(Math.abs(x - editorStartX)),
+      h: Math.round(Math.abs(y - editorStartY))
+    };
+  };
+  canvas.onmouseup = function() {
+    if (editorRect && editorRect.w > 1 && editorRect.h > 1) {
+      var txt = 'x:'+editorRect.x+'% y:'+editorRect.y+'% w:'+editorRect.w+'% h:'+editorRect.h+'%';
+      output.innerHTML = '<div style="background:rgba(45,51,64,.85);color:#EFEAE0;padding:8px 14px;border-radius:8px;font-size:13px;font-family:monospace;cursor:pointer;" onclick="navigator.clipboard.writeText(\''+txt+'\').then(function(){showToast(\'📋 已复制\')})">'+txt+' (点击复制)</div>';
+    }
+    editorStartX = undefined;
+  };
+}
+
+var sceneZones = [
+  { x:4, y:28, w:16, h:20 },  // window
+  { x:4, y:51, w:8, h:24 },   // wash
+  { x:13, y:63, w:9, h:18 },  // wash
+  { x:12, y:48, w:27, h:15 }, // sleep
+  { x:59, y:29, w:19, h:37 }, // desk
+  { x:72, y:70, w:25, h:25 }, // dining
+];
+function hitZone(xPct, yPct) {
+  for (var i = 0; i < sceneZones.length; i++) {
+    var z = sceneZones[i];
+    if (xPct >= z.x && xPct <= z.x+z.w && yPct >= z.y && yPct <= z.y+z.h) return true;
+  }
+  return false;
+}
+function handleSceneHover(e) {
+  if (currentScene !== 'main') return;
+  var room = document.getElementById('sceneRoom');
+  var rect = room.getBoundingClientRect();
+  var xPct = (e.clientX - rect.left) / rect.width * 100;
+  var yPct = (e.clientY - rect.top) / rect.height * 100;
+  room.style.cursor = hitZone(xPct, yPct) ? 'pointer' : 'default';
+}
+
 function handleSceneClick(e) {
   if (e.target.tagName === 'BUTTON') return;
   var room = document.getElementById('sceneRoom');
   var rect = room.getBoundingClientRect();
-  var col = Math.floor((e.clientX - rect.left) / rect.width * 3);
-  var row = Math.floor((e.clientY - rect.top) / rect.height * 2);
   var xPct = (e.clientX - rect.left) / rect.width * 100;
+  var yPct = (e.clientY - rect.top) / rect.height * 100;
   if (currentScene === 'main') {
-    // Grid: row0=[1,2,3] row1=[4,5,6]
-    if (col === 0 && row === 0) switchScene('window');
-    else if (col === 0 && row === 1) {
-      switchScene(xPct < 16.5 ? 'wash' : 'sleep');
+    var sceneMap = { 0:'window', 1:'wash', 2:'wash', 3:'sleep', 4:'desk', 5:'dining' };
+    for (var i = 0; i < sceneZones.length; i++) {
+      var z = sceneZones[i];
+      if (xPct >= z.x && xPct <= z.x+z.w && yPct >= z.y && yPct <= z.y+z.h) {
+        switchScene(sceneMap[i]); return;
+      }
     }
-    else if (col === 2 && row === 0) switchScene('desk');
-    else if (col === 2 && row === 1) switchScene('dining');
-  } else if (currentScene === 'desk' && col === 1 && row === 0) {
+  } else if (currentScene === 'desk') {
     // 点击书桌中央弹出徽章收藏
-    showBadgeCollection();
+    if (xPct > 30 && xPct < 70 && yPct > 20 && yPct < 60) showBadgeCollection();
   }
 }
 
@@ -1579,7 +1673,7 @@ function switchScene(scene) {
   if (room) {
     room.classList.toggle('scene-main', isMain);
     room.classList.toggle('scene-desk', scene === 'desk');
-    room.style.cursor = isMain ? 'pointer' : 'default';
+    room.style.cursor = '';
   }
   // 书桌场景：中央可点击区域指示
   var deskZone = document.getElementById('deskClickZone');

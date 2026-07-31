@@ -147,8 +147,11 @@
     <div class="growth-member-tabs" id="growthMemberTabs" style="display:none;"></div>
     <div id="growthLevelPane">
       <!-- 小老鼠的家（嵌入） -->
-      <div class="scene-room" id="sceneRoom" style="margin-bottom:10px;cursor:pointer;" onclick="handleSceneClick(event)">
+      <div class="scene-room" id="sceneRoom" style="margin-bottom:10px;" onmousemove="handleSceneHover(event)" onclick="handleSceneClick(event)">
         <img class="scene-bg-img" id="sceneBgImg" src="docs/design/场景图.jpg" alt="">
+        <canvas class="scene-editor-canvas" id="sceneEditorCanvas" style="display:none;"></canvas>
+        <div class="scene-editor-output" id="sceneEditorOutput" style="display:none;"></div>
+        <button id="btnSceneEditor" onclick="event.stopPropagation();initSceneEditor()" style="position:absolute;top:4px;right:4px;z-index:100;padding:4px 10px;border:1px solid var(--gold);border-radius:6px;background:rgba(45,51,64,.8);color:var(--gold);font-size:11px;cursor:pointer;display:none;">✎ 编辑热区</button>
         <div class="seasonal-lights" id="xmasLights"></div>
         <div class="scene-dust-layer" id="sceneDust"></div>
         <div class="scene-magic-layer" id="sceneMagic"></div>
