@@ -2204,6 +2204,85 @@ function handlePinError(msg) {
 
 // ========== Desktop ==========
 function isDesktop() { return false; } // 始终移动端，打印通过手动按钮触发
+// --- 手机版周报 ---
+function renderMobileWeekReport() {
+  if (!currentWeek) currentWeek = getMonday(new Date());
+  var dates = []; for (var i=0;i<7;i++){var dd=new Date(currentWeek);dd.setDate(currentWeek.getDate()+i);dates.push(dd);}
+  var DOW=['一','二','三','四','五','六','日'];
+  var mode=getModeForDate(currentWeek);
+  var wkNum=getWeekKey(currentWeek).split('-W')[1];
+  var savedName=(localStorage.getItem('habitrat:childName')||localStorage.getItem('habitTable_childName'))||'小美';
+  var today=fmtDateFull(new Date());
+
+  var S=' style="';
+  var css={
+    page:'font-family:-apple-system,PingFang SC,Microsoft YaHei,sans-serif;color:#2D3340;max-width:420px;margin:0 auto;padding:16px;background:#F6F1E6;min-height:100vh;',
+    h1:'font-size:20px;font-weight:900;text-align:center;margin:0 0 4px;',
+    sub:'font-size:12px;color:#7A7367;text-align:center;margin:0 0 14px;',
+    statRow:'display:flex;gap:8px;margin-bottom:14px;',
+    statBox:'flex:1;background:#fff;border-radius:10px;padding:12px 8px;text-align:center;box-shadow:0 1px 4px rgba(45,51,64,.06);',
+    statVal:'font-size:20px;font-weight:800;',
+    statLbl:'font-size:10px;color:#7A7367;margin-top:2px;',
+    memberTitle:'font-size:13px;font-weight:700;color:#5C6F8E;margin:14px 0 8px;padding-left:4px;',
+    card:'background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(45,51,64,.06);',
+    cardTop:'display:flex;align-items:center;gap:8px;margin-bottom:8px;',
+    cardName:'font-size:14px;font-weight:600;flex:1;',
+    cardRule:'font-size:11px;color:#5C6F8E;',
+    cardMeta:'font-size:11px;color:#7A7367;display:flex;gap:12px;',
+    dots:'display:flex;gap:4px;margin-top:8px;',
+    dot:'width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-direction:column;',
+    dotDone:'background:#E8F8F5;color:#1FAE9F;',
+    dotMiss:'background:#FDE8E8;color:#FF6B6B;',
+    dotPend:'background:#F0EDE5;color:#B9B2A4;',
+    dotNA:'background:#F8F7F4;color:#ddd;',
+    dotLabel:'font-size:8px;margin-top:-1px;',
+    legend:'display:flex;gap:10px;font-size:10px;color:#7A7367;justify-content:center;margin-top:16px;padding-top:8px;border-top:1px solid #E0D9CB;',
+  };
+
+  var totalDone=0,totalAll=0;
+  getActiveHabits().forEach(function(hb){for(var d=0;d<7;d++){if(!isDayApplicable(hb,dates[d]))continue;totalAll++;if(getDayStatus(hb,dates[d])==='✓')totalDone++;}});
+  var totalExp=getChildMembers().reduce(function(s,m){return s+getTotalExp(m.id);},0);
+  var totalCoin=getChildMembers().reduce(function(s,m){return s+getCoinBalance(m.id);},0);
+
+  var h='<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>周报</title></head><body style="'+css.page+'">';
+  h+='<div style="'+css.h1+'">📋 周报</div>';
+  h+='<div style="'+css.sub+'">'+savedName+' · 第'+wkNum+'周 · '+getModeLabel(mode)+'</div>';
+  h+='<div style="'+css.statRow+'">';
+  h+='<div style="'+css.statBox+'"><div style="'+css.statVal+'color:#1FAE9F;">'+totalDone+'/'+totalAll+'</div><div style="'+css.statLbl+'">完成率</div></div>';
+  h+='<div style="'+css.statBox+'"><div style="'+css.statVal+'">'+totalExp+'</div><div style="'+css.statLbl+'">EXP</div></div>';
+  h+='<div style="'+css.statBox+'"><div style="'+css.statVal+'color:#C89D4A;">'+totalCoin+'</div><div style="'+css.statLbl+'">金币</div></div>';
+  h+='</div>';
+
+  var memberGroups={};
+  getActiveHabits().forEach(function(hb){var m=hb.ownerMemberId;if(!memberGroups[m])memberGroups[m]=[];memberGroups[m].push(hb);});
+  Object.entries(memberGroups).forEach(function(entry){
+    var mid=entry[0],habits=entry[1];
+    h+='<div style="'+css.memberTitle+'">'+getMemberName(mid)+'</div>';
+    habits.forEach(function(hb){
+      var sc=getStreakCount(hb.id);
+      var ruleText=(mode==='vacation'&&hb.ruleVacation)?hb.ruleVacation:(hb.ruleText||'');
+      h+='<div style="'+css.card+'">';
+      h+='<div style="'+css.cardTop+'"><span style="font-size:20px;">'+(hb.emoji||'📌')+'</span><span style="'+css.cardName+'">'+hb.title+'</span></div>';
+      if(ruleText)h+='<div style="'+css.cardRule+'">'+ruleText+'</div>';
+      h+='<div style="'+css.cardMeta+'"><span>🔥 '+sc+'/'+hb.streakNeed+'</span><span>EXP '+hb.expValue+'</span><span>💰 '+hb.coinValue+'</span></div>';
+      h+='<div style="'+css.dots+'">';
+      for(var d=0;d<7;d++){
+        var st=getDayStatus(hb,dates[d]);
+        var dotCls,dotChar;
+        if(st==='✓'){dotCls=css.dotDone;dotChar='✔';}
+        else if(st==='✗'){dotCls=css.dotMiss;dotChar='✗';}
+        else if(st==='na'){dotCls=css.dotNA;dotChar='—';}
+        else{dotCls=css.dotPend;dotChar='○';}
+        h+='<div style="'+css.dot+dotCls+'"><span>'+dotChar+'</span><span style="'+css.dotLabel+'">'+DOW[d]+'</span></div>';
+      }
+      h+='</div></div>';
+    });
+  });
+  h+='<div style="'+css.legend+'"><span>✔ 完成</span><span>✗ 未完成</span><span>○ 待完成</span><span>— 不适用</span></div>';
+  h+='</body></html>';
+  document.getElementById('printableView').innerHTML = h;
+}
+// --- A4打印版周报 ---
 function renderPrintableWeek() {
   if (!currentWeek) currentWeek = getMonday(new Date());
   var dates = []; for (var i = 0; i < 7; i++) { var dd = new Date(currentWeek); dd.setDate(currentWeek.getDate()+i); dates.push(dd); }
@@ -3263,6 +3342,13 @@ function init() {
     recomputeStreaks(); saveData(); showToast('✅ 积分已重算');
   });
   // Settings tab (no PIN needed - day lock replaces PIN)
+  document.getElementById('btnMobileWeek').addEventListener('click', function() {
+    if (!currentWeek) currentWeek = getMonday(new Date());
+    renderMobileWeekReport();
+    var w = window.open('about:blank', '_blank');
+    w.document.write(document.getElementById('printableView').innerHTML);
+    w.document.close();
+  });
   document.getElementById('btnPrintView').addEventListener('click', function() {
     if (!currentWeek) currentWeek = getMonday(new Date());
     renderPrintableWeek();
