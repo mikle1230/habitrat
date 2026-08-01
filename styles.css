@@ -986,7 +986,11 @@ body { font-family: var(--font-body); background: var(--body-bg); color: var(--i
 .rules-card-sub { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
 .rules-card-arrow { font-size: 20px; color: var(--ink-soft); }
 
-.rules-modal-card { max-width: 360px !important; padding: 20px !important; }
+.rules-modal-card {
+  max-width: 360px !important; padding: 20px !important;
+  display: flex; flex-direction: column;
+  max-height: 80vh;
+}
 .rules-modal-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px;
@@ -996,7 +1000,11 @@ body { font-family: var(--font-body); background: var(--body-bg); color: var(--i
   background: none; border: none; font-size: 20px;
   cursor: pointer; color: var(--ink-soft); padding: 4px 8px;
 }
-.rules-modal-body { max-height: 65vh; overflow-y: auto; text-align: left; }
+.rules-modal-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; text-align: left;
+}
 .rule-section { margin-bottom: 16px; }
 .rule-section:last-child { margin-bottom: 0; }
 .rule-title { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
