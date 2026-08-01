@@ -2083,12 +2083,6 @@ function checkWeatherAndSeason() {
   }
   // Halloween: Oct 25-31
   // (future: spider web overlay, etc.)
-  // Rain: hook for real weather API — for now, show rain on rainy-looking dates (March-May)
-  var rain = document.getElementById('rainOverlay');
-  if (rain) {
-    var isRainySeason = (month >= 3 && month <= 5);
-    if (isRainySeason) rain.classList.add('active'); else rain.classList.remove('active');
-  }
 }
 
 // ---- Micro Event Timer ----
@@ -2102,11 +2096,9 @@ function stopMicroEventTimer() {
 }
 function scheduleNextMicroEvent() {
   var events = [
-    { id: 'microBook', min: 20, max: 35 },
     { id: 'microFirefly', min: 35, max: 55 },
     { id: 'microMagic', min: 60, max: 90 },
     { id: 'microGlint', min: 80, max: 120 },
-    { id: 'microSmile', min: 100, max: 160 },
   ];
   var ev = events[Math.floor(Math.random() * events.length)];
   var delay = (ev.min + Math.random() * (ev.max - ev.min)) * 1000;

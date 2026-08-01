@@ -877,15 +877,11 @@ body { font-family: var(--font-body); background: var(--body-bg); color: var(--i
   30%{opacity:1;transform:scale(1.1)}
   100%{opacity:0;transform:scale(1)}
 }
-/* Book slip */
-.micro-book { top: 32%; left: 20%; font-size: 20px; }
 /* Badge glint */
 .micro-glint { top: 15%; right: 25%; font-size: 16px; color: #FFD700; }
 /* Magic flash */
 .micro-magic { top: 45%; left: 40%; width: 60px; height: 60px;
   background: radial-gradient(circle, rgba(55,166,222,.6), transparent 70%); border-radius: 50%; }
-/* Ratty smile */
-.micro-smile { bottom: 34%; left: 50%; transform: translateX(-50%); font-size: 14px; color: #FFD700; white-space: nowrap; }
 /* Firefly by window */
 .micro-firefly { top: 12%; right: 8%; font-size: 14px; animation-duration: 2.5s; }
 
@@ -904,13 +900,6 @@ body { font-family: var(--font-body); background: var(--body-bg); color: var(--i
   33%{background:#FFE66D;box-shadow:0 0 4px #FFE66D}
   66%{background:#6BCB77;box-shadow:0 0 4px #6BCB77}
 }
-.rain-overlay {
-  position: absolute; inset: 0; pointer-events: none; z-index: 1;
-  opacity: 0; transition: opacity 3s;
-  background: linear-gradient(180deg, rgba(100,140,180,.08), rgba(80,120,160,.15));
-}
-.rain-overlay.active { opacity: 1; }
-
 .scene-back-btn {
   position: absolute; top: 8px; left: 8px; z-index: 100;
   background: rgba(45,51,64,.7); color: var(--hero-text);
