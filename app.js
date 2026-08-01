@@ -22,6 +22,7 @@ const mascotStages = {
 const OUTFIT_CATEGORIES = ['clothing', 'companion', 'background'];
 const OUTFIT_CATEGORY_LABELS = { clothing: '服饰', companion: '伙伴', background: '背景' };
 let outfitState = {}; // { memberId: { clothing: 'scarf_green', companion: null, background: null } }
+let sceneZones = []; // 场景热区：{ name, points:[{x,y}] } 百分比坐标多边形，可增删，自动持久化
 
 const OUTFIT_DEFINITIONS = {
   clothing: [
@@ -471,6 +472,7 @@ function loadData() {
       if (_levelConfig.titles.length < 21) { _levelConfig.titles = ['新手冒险者','新手冒险者','新手冒险者','新手冒险者','坚毅探险家','坚毅探险家','坚毅探险家','坚毅探险家','坚毅探险家','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','荣耀守护者','传奇领航者']; }
       outfitState = d.outfitState || {};
       roomState = d.roomState || {};
+      sceneZones = d.sceneZones !== undefined ? d.sceneZones : defaultSceneZones();
       _dataVersion = d._dataVersion || 0;
 
       // 补丁：旧数据中习惯模板可能缺 emoji 或用旧 emoji
@@ -581,7 +583,7 @@ function saveData(skipSync) {
   state._dataVersion = _dataVersion;
   localStorage.setItem('habitrat:v4', JSON.stringify({
     checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog,
-    familyCode, parentPin, securityQuestion, securityAnswer, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, _schemaVersion: 2, _dataVersion,
+    familyCode, parentPin, securityQuestion, securityAnswer, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, sceneZones, _schemaVersion: 2, _dataVersion,
   }));
   if (!skipSync) debounceSyncToServer();
 }
@@ -1504,39 +1506,9 @@ function renderGrowthView() {
   if (gcGrid) gcGrid.innerHTML = '';
   // 装扮快捷入口
   const childId4Scene = selectedMemberId;
-  const sceneLevel = prog.level;
   const sceneOutfits = getUnlockedOutfits(childId4Scene).filter(i => i.unlocked);
   const sceneState = outfitState[childId4Scene] || { clothing: null, companion: null, background: null };
-  // Scene info: level + title + EXP progress
-  var sceneInfoEl = document.getElementById('sceneInfo');
-  if (sceneInfoEl) {
-    const nextExp = getExpForLevel(sceneLevel + 1);
-    const remain = nextExp - prog.currentExp;
-    const need = nextExp - getExpForLevel(sceneLevel);
-    const pct = Math.round((prog.currentExp - getExpForLevel(sceneLevel)) / need * 100);
-    sceneInfoEl.innerHTML = 'Lv.' + sceneLevel + ' · ' + getTitleForLevel(sceneLevel)
-      + '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'
-      + '<div style="flex:1;height:6px;background:var(--track-bg);border-radius:3px;overflow:hidden;">'
-      + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,var(--gold),var(--glow));border-radius:3px;"></div></div>'
-      + '<span style="font-size:11px;color:var(--ink-soft);font-weight:500;">距 Lv.' + (sceneLevel + 1) + ' 还需 ' + remain + ' EXP</span>'
-      + '</div>';
-  }
 
-  // Today's mini-progress
-  const todayStr2 = fmtDateFull(new Date());
-  let todayDone2 = 0, todayTotal2 = 0;
-  getActiveHabits().forEach(function(h) {
-    if (!isDayApplicable(h, new Date())) return;
-    todayTotal2++;
-    if (getDayStatus(h, new Date()) === '✓') todayDone2++;
-  });
-  var mottoEl = document.getElementById('sceneMotto');
-  if (mottoEl && todayTotal2 > 0) {
-    const allDone = todayDone2 === todayTotal2;
-    const emoji = allDone ? '🎉' : '💪';
-    const text = allDone ? '今天全部完成，太棒啦！' : '今天完成 ' + todayDone2 + '/' + todayTotal2 + '，加油！';
-    mottoEl.innerHTML = '<span style="cursor:pointer;" onclick="switchView(\'home\')">' + emoji + ' ' + text + ' →</span>';
-  }
 
   // Dress-up collection summary
   var dressupSection = document.getElementById('growthRecent');
@@ -1567,7 +1539,6 @@ function renderGrowthView() {
 var currentScene = 'main';
 // ========== 场景热区编辑器（?editor=1 启用） ==========
 var sceneEditorActive = false;
-var editorStartX, editorStartY, editorRect;
 
 // Show editor button (called after scene renders)
 setTimeout(function() {
@@ -1586,6 +1557,7 @@ function initSceneEditor() {
     sceneEditorActive = false;
     canvas.style.display = 'none';
     output.style.display = 'none';
+    output.innerHTML = '';
     if (btn) { btn.textContent = '✎ 编辑热区'; btn.style.background = 'rgba(45,51,64,.8)'; btn.style.color = 'var(--gold)'; }
     return;
   }
@@ -1596,62 +1568,281 @@ function initSceneEditor() {
   canvas.height = bg.clientHeight;
   if (btn) { btn.textContent = '退出编辑'; btn.style.background = 'rgba(200,157,74,.9)'; btn.style.color = '#2D3340'; }
   var ctx = canvas.getContext('2d');
+  var drawing = false;
+  var editorPts = [];
+  var selectedName = null;
+  var hadFree = false; // 本次绘制是否经过已有热区之外的自由区域
+
+  function zoneNameAt(xPct, yPct) {
+    for (var i = 0; i < sceneZones.length; i++) {
+      if (pointInPoly(sceneZones[i].points, xPct, yPct)) return sceneZones[i].name;
+    }
+    return null;
+  }
+  function nextZoneName() {
+    var max = 0;
+    sceneZones.forEach(function(z) {
+      var m = /^zone-(\d+)$/.exec(z.name || '');
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return 'zone-' + (max + 1);
+  }
+  function drawAll() { drawSceneZones(canvas, ctx, selectedName); }
+  function refreshOutput() {
+    if (selectedName) {
+      output.innerHTML = '<div style="display:flex;align-items:center;gap:8px;background:rgba(255,107,107,.15);color:#FF6B6B;padding:8px 12px;border-radius:8px;font-size:13px;">'
+        + '🎯 已选中：<b>' + selectedName + '</b>'
+        + '<button onclick="deleteZone(\'' + selectedName + '\')" style="margin-left:auto;border:none;border-radius:6px;background:#FF6B6B;color:#fff;padding:4px 10px;font-size:12px;cursor:pointer;">🗑 删除</button></div>';
+    } else {
+      output.innerHTML = '<div style="background:rgba(45,51,64,.85);color:#EFEAE0;padding:8px 14px;border-radius:8px;font-size:12px;">'
+        + '📌 在热区外按住画圈 = 新增 · 点已有热区 = 选中/删除</div>';
+    }
+  }
 
   canvas.onmousedown = function(e) {
     e.stopPropagation();
     var rect = canvas.getBoundingClientRect();
-    editorStartX = (e.clientX - rect.left) / rect.width * 100;
-    editorStartY = (e.clientY - rect.top) / rect.height * 100;
-    editorRect = null;
+    var xPct = (e.clientX - rect.left) / rect.width * 100;
+    var yPct = (e.clientY - rect.top) / rect.height * 100;
+    var hitName = zoneNameAt(xPct, yPct);
+    if (hitName) {
+      // 点选已有热区（选中/删除）
+      selectedName = hitName;
+      drawing = false;
+      editorPts = [];
+      drawAll();
+      refreshOutput();
+      return;
+    }
+    // 空白处开始画圈（新增）
+    selectedName = null;
+    drawing = true;
+    hadFree = true;
+    editorPts = [{ x: xPct, y: yPct, snap: false }];
+    refreshOutput();
   };
   canvas.onmousemove = function(e) {
-    if (editorStartX === undefined) return;
+    if (!drawing) return;
     var rect = canvas.getBoundingClientRect();
     var x = (e.clientX - rect.left) / rect.width * 100;
     var y = (e.clientY - rect.top) / rect.height * 100;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(200,157,74,0.3)';
-    ctx.strokeStyle = '#C89D4A';
-    ctx.lineWidth = 2;
-    var rx = Math.min(editorStartX, x) / 100 * canvas.width;
-    var ry = Math.min(editorStartY, y) / 100 * canvas.height;
-    var rw = Math.abs(x - editorStartX) / 100 * canvas.width;
-    var rh = Math.abs(y - editorStartY) / 100 * canvas.height;
-    ctx.fillRect(rx, ry, rw, rh);
-    ctx.strokeRect(rx, ry, rw, rh);
-    editorRect = {
-      x: Math.round(Math.min(editorStartX, x)),
-      y: Math.round(Math.min(editorStartY, y)),
-      w: Math.round(Math.abs(x - editorStartX)),
-      h: Math.round(Math.abs(y - editorStartY))
-    };
+    var last = editorPts[editorPts.length - 1];
+    // 轨迹点过密时跳过，减少数据量
+    if (last && Math.abs(x - last.x) < 0.3 && Math.abs(y - last.y) < 0.3) return;
+    var sp = applyZoneSnap(x, y);
+    if (sp.x !== x || sp.y !== y) {
+      // 吸附到已有热区边界：贴近上一吸附点时跳过，避免边界点堆积
+      if (last && Math.abs(sp.x - last.x) < 0.3 && Math.abs(sp.y - last.y) < 0.3) return;
+      editorPts.push({ x: sp.x, y: sp.y, snap: true });
+    } else {
+      hadFree = true;
+      editorPts.push({ x: x, y: y, snap: false });
+    }
+    drawAll();
+    drawStroke();
   };
   canvas.onmouseup = function() {
-    if (editorRect && editorRect.w > 1 && editorRect.h > 1) {
-      var txt = 'x:'+editorRect.x+'% y:'+editorRect.y+'% w:'+editorRect.w+'% h:'+editorRect.h+'%';
-      output.innerHTML = '<div style="background:rgba(45,51,64,.85);color:#EFEAE0;padding:8px 14px;border-radius:8px;font-size:13px;font-family:monospace;cursor:pointer;" onclick="navigator.clipboard.writeText(\''+txt+'\').then(function(){showToast(\'📋 已复制\')})">'+txt+' (点击复制)</div>';
+    if (!drawing) return;
+    drawing = false;
+    if (editorPts.length >= 4) {
+      var pts = simplifyPath(editorPts, 0.8);
+      if (pts.length >= 3) {
+        if (hadFree) {
+          var name = nextZoneName();
+          sceneZones.push({ name: name, points: pts });
+          saveData();
+          showToast('✅ 已添加热区「' + name + '」');
+          selectedName = name;
+        } else {
+          showToast('⚠️ 该区域已在其他热区内，无法新增');
+        }
+      }
     }
-    editorStartX = undefined;
+    editorPts = [];
+    hadFree = false;
+    drawAll();
+    refreshOutput();
   };
+  function drawStroke() {
+    if (editorPts.length < 2) return;
+    var hasSnap = editorPts.some(function(p) { return p.snap; });
+    ctx.strokeStyle = hasSnap ? '#1FAE9F' : '#C89D4A'; // 吸附段绿色
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(editorPts[0].x / 100 * canvas.width, editorPts[0].y / 100 * canvas.height);
+    for (var i = 1; i < editorPts.length; i++) {
+      ctx.lineTo(editorPts[i].x / 100 * canvas.width, editorPts[i].y / 100 * canvas.height);
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(200,157,74,0.25)';
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawAll();
+  refreshOutput();
 }
 
-var sceneZones = [
-  { x:4, y:28, w:16, h:20 },  // window
-  { x:4, y:51, w:8, h:24 },   // wash
-  { x:13, y:63, w:9, h:18 },  // wash
-  { x:13, y:47, w:18, h:14 }, // sleep
-  { x:31, y:51, w:9, h:12 },  // chest (reserved)
-  { x:59, y:29, w:19, h:37 }, // desk
-  { x:72, y:70, w:25, h:25 }, // dining
+// 绘制全部热区（金色描边 + 半透明填充 + 名称标签；选中为红色）
+function drawSceneZones(canvas, ctx, selectedName) {
+  if (!canvas || !ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  sceneZones.forEach(function(z) {
+    var pts = z.points;
+    if (!pts || pts.length < 2) return;
+    var isSel = z.name === selectedName;
+    var color = isSel ? '#FF6B6B' : '#C89D4A';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x / 100 * canvas.width, pts[0].y / 100 * canvas.height);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x / 100 * canvas.width, pts[i].y / 100 * canvas.height);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fillStyle = isSel ? 'rgba(255,107,107,0.3)' : 'rgba(200,157,74,0.25)';
+    ctx.fill();
+    var cx = 0, cy = 0;
+    pts.forEach(function(p) { cx += p.x; cy += p.y; });
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(z.name, cx / pts.length / 100 * canvas.width, cy / pts.length / 100 * canvas.height - 4);
+  });
+}
+
+// 若点位于某个已有热区内，吸附到该热区边界上最近的点；否则返回原坐标
+function applyZoneSnap(x, y) {
+  var best = null, bestDist = Infinity;
+  for (var i = 0; i < sceneZones.length; i++) {
+    var pts = sceneZones[i].points;
+    if (!pts || pts.length < 3) continue;
+    if (!pointInPoly(pts, x, y)) continue;
+    for (var j = 0; j < pts.length; j++) {
+      var a = pts[j], b = pts[(j + 1) % pts.length];
+      var proj = closestPointOnSegment(a, b, { x: x, y: y });
+      var d = (proj.x - x) * (proj.x - x) + (proj.y - y) * (proj.y - y);
+      if (d < bestDist) { bestDist = d; best = proj; }
+    }
+  }
+  return best || { x: x, y: y };
+}
+function closestPointOnSegment(a, b, p) {
+  var dx = b.x - a.x, dy = b.y - a.y;
+  var len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { x: a.x, y: a.y };
+  var t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return { x: a.x + t * dx, y: a.y + t * dy };
+}
+
+// 删除热区（供编辑器选中条调用）
+function deleteZone(name) {
+  var idx = -1;
+  for (var i = 0; i < sceneZones.length; i++) { if (sceneZones[i].name === name) { idx = i; break; } }
+  if (idx < 0) return;
+  sceneZones.splice(idx, 1);
+  saveData();
+  showToast('🗑 已删除热区「' + name + '」');
+  var canvas = document.getElementById('sceneEditorCanvas');
+  var output = document.getElementById('sceneEditorOutput');
+  if (canvas) {
+    var ctx = canvas.getContext('2d');
+    drawSceneZones(canvas, ctx, null);
+  }
+  if (output) output.innerHTML = '<div style="background:rgba(45,51,64,.85);color:#EFEAE0;padding:8px 14px;border-radius:8px;font-size:12px;">📌 在热区外按住画圈 = 新增 · 点已有热区 = 选中/删除</div>';
+  var btn = document.getElementById('btnSceneEditor');
+  if (btn && sceneEditorActive) { btn.textContent = '退出编辑'; btn.style.background = 'rgba(200,157,74,.9)'; btn.style.color = '#2D3340'; }
+}
+
+// ===== 复制到剪贴板（Clipboard API + execCommand 降级）=====
+function copyText(txt) {
+  function fallback() {
+    var ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      if (typeof showToast === 'function') showToast('📋 已复制');
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('⚠️ 复制失败，请手动选择文本复制');
+    }
+    document.body.removeChild(ta);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function() {
+      if (typeof showToast === 'function') showToast('📋 已复制');
+    }).catch(function() { fallback(); });
+  } else {
+    fallback();
+  }
+}
+
+// ===== 路径抽稀（Douglas-Peucker）=====
+function simplifyPath(points, tol) {
+  if (points.length < 3) return points;
+  var a = points[0], b = points[points.length - 1];
+  var dmax = 0, idx = 0;
+  for (var i = 1; i < points.length - 1; i++) {
+    var d = perpDist(points[i], a, b);
+    if (d > dmax) { dmax = d; idx = i; }
+  }
+  if (dmax > tol) {
+    var l = simplifyPath(points.slice(0, idx + 1), tol);
+    var r = simplifyPath(points.slice(idx), tol);
+    return l.slice(0, l.length - 1).concat(r);
+  }
+  return [a, b];
+}
+function perpDist(p, a, b) {
+  var dx = b.x - a.x, dy = b.y - a.y;
+  if (dx === 0 && dy === 0) return Math.sqrt((p.x - a.x) * (p.x - a.x) + (p.y - a.y) * (p.y - a.y));
+  return Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / Math.sqrt(dx * dx + dy * dy);
+}
+
+// ===== 点在多边形内判定（射线法）=====
+function pointInPoly(pts, x, y) {
+  var inside = false;
+  for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    var xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+// 默认热区（首次使用时初始化；之后以用户编辑保存的为准）
+const DEFAULT_SCENE_ZONES = [
+  { name: 'zone-1', points: [{x:4,y:51},{x:12,y:51},{x:12,y:75},{x:4,y:75}] },    // 洗脸区
+  { name: 'zone-2', points: [{x:13,y:47},{x:31,y:47},{x:31,y:61},{x:13,y:61}] }, // 床
+  { name: 'zone-3', points: [{x:4,y:28},{x:20,y:28},{x:20,y:48},{x:4,y:48}] },   // 窗户
+  { name: 'zone-4', points: [{x:31,y:51},{x:40,y:51},{x:40,y:63},{x:31,y:63}] }, // 宝箱
+  { name: 'zone-5', points: [{x:35,y:28},{x:47,y:28},{x:47,y:45},{x:35,y:45}] }, // 成就室2（占位）
+  { name: 'zone-6', points: [{x:59,y:29},{x:78,y:29},{x:78,y:66},{x:59,y:66}] }, // 书桌
+  { name: 'zone-7', points: [{x:72,y:70},{x:97,y:70},{x:97,y:95},{x:72,y:95}] }, // 餐桌
 ];
+// 热区名 → 跳转目标场景（'dressup' = 打开装扮面板）。zone-8 / zone-9 待定，暂不关联。
+const SCENE_NAME_MAP = {
+  // 用户自定义热区
+  'zone-1': 'wash', 'zone-2': 'sleep', 'zone-3': 'window', 'zone-4': 'dressup',
+  'zone-5': 'trophy', 'zone-6': 'desk', 'zone-7': 'dining',
+  // 兼容旧默认热区名
+  window: 'window', 'wash-1': 'wash', 'wash-2': 'wash', sleep: 'sleep',
+  chest: 'dressup', desk: 'desk', dining: 'dining'
+};
+// 深拷贝默认热区，避免共享引用
+function defaultSceneZones() {
+  return DEFAULT_SCENE_ZONES.map(z => ({ name: z.name, points: z.points.map(p => ({ x: p.x, y: p.y })) }));
+}
 function hitZone(xPct, yPct) {
   for (var i = 0; i < sceneZones.length; i++) {
     var z = sceneZones[i];
-    if (xPct >= z.x && xPct <= z.x+z.w && yPct >= z.y && yPct <= z.y+z.h) return true;
+    if (z.points && pointInPoly(z.points, xPct, yPct)) return true;
   }
   return false;
 }
 function handleSceneHover(e) {
+  if (sceneEditorActive) return; // 编辑热区时禁用场景手势
   if (currentScene !== 'main') return;
   var room = document.getElementById('sceneRoom');
   var rect = room.getBoundingClientRect();
@@ -1661,18 +1852,20 @@ function handleSceneHover(e) {
 }
 
 function handleSceneClick(e) {
+  if (sceneEditorActive) return; // 编辑热区时禁用场景切换
   if (e.target.tagName === 'BUTTON') return;
   var room = document.getElementById('sceneRoom');
   var rect = room.getBoundingClientRect();
   var xPct = (e.clientX - rect.left) / rect.width * 100;
   var yPct = (e.clientY - rect.top) / rect.height * 100;
   if (currentScene === 'main') {
-    var sceneMap = { 0:'window', 1:'wash', 2:'wash', 3:'sleep', 4:'dressup', 5:'desk', 6:'dining' };
     for (var i = 0; i < sceneZones.length; i++) {
       var z = sceneZones[i];
-      if (xPct >= z.x && xPct <= z.x+z.w && yPct >= z.y && yPct <= z.y+z.h) {
-        if (sceneMap[i] === 'dressup') { toggleDressupPanel(); return; }
-        if (sceneMap[i]) switchScene(sceneMap[i]); return;
+      if (z.points && pointInPoly(z.points, xPct, yPct)) {
+        var target = SCENE_NAME_MAP[z.name];
+        if (target === 'dressup') { toggleDressupPanel(); return; }
+        if (target) { switchScene(target); return; }
+        showToast('「' + z.name + '」尚未关联场景'); return;
       }
     }
   } else if (currentScene === 'desk') {
@@ -1719,7 +1912,8 @@ var sceneImages = {
   window: 'docs/design/窗外.jpg',
   dining: 'docs/design/餐桌.jpg',
   sleep: 'docs/design/睡觉.jpg',
-  desk: 'docs/design/书桌.jpg'
+  desk: 'docs/design/书桌.jpg',
+  trophy: 'docs/design/成就室2.png'
 };
 function switchScene(scene) {
   var bg = document.getElementById('sceneBgImg');
@@ -1735,7 +1929,6 @@ function switchScene(scene) {
   var room = document.getElementById('sceneRoom');
   var decos = document.getElementById('sceneDecos');
   var rat = document.getElementById('sceneRat');
-  var motto = document.getElementById('sceneMotto');
   var isMain = scene === 'main';
   if (room) {
     room.classList.toggle('scene-main', isMain);
@@ -1761,15 +1954,12 @@ function switchScene(scene) {
   if (back) back.style.display = isMain ? 'none' : 'block';
   if (decos) decos.style.display = isMain ? '' : 'none';
   if (rat) rat.style.display = isMain ? '' : 'none';
-  if (motto) motto.style.display = isMain ? '' : 'none';
   // 场景提示
-  var hint = document.getElementById('sceneHint');
   var zhTL = document.getElementById('zoneHintTl');
   var zhTR = document.getElementById('zoneHintTr');
   var zhBL = document.getElementById('zoneHintBl');
   var zhBR = document.getElementById('zoneHintBr');
   var zhShow = isMain ? '' : 'none';
-  if (hint) hint.style.display = zhShow;
   if (zhTL) zhTL.style.display = zhShow;
   if (zhTR) zhTR.style.display = zhShow;
   if (zhBL) zhBL.style.display = zhShow;
@@ -1818,7 +2008,6 @@ function closeDressupPanel() {
 function renderScene(memberId) {
   const prog = getExpProgress(memberId);
   const level = prog.level;
-  var si = document.getElementById('sceneInfo'); if (si) si.textContent = '总EXP: ' + prog.currentExp + ' · ' + getTitleForLevel(level);
   // Level evolution: room decorations
   toggleEvo('evoFlower', level >= 4);
   toggleEvo('evoStars', level >= 10);
@@ -2106,7 +2295,7 @@ function renderPointsLog(monthKey) {
 // ========== Sync ==========
 function getSyncData() {
   return { checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog,
-    familyCode, parentPin, securityQuestion, securityAnswer, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, _schemaVersion: 2, _dataVersion };
+    familyCode, parentPin, securityQuestion, securityAnswer, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, sceneZones, _schemaVersion: 2, _dataVersion };
 }
 let syncTimer = null, syncPending = false, syncPollInterval = null;
 function debounceSyncToServer() { clearTimeout(syncTimer); syncPending = true; syncTimer = setTimeout(() => { syncPending = false; syncToServer(); }, 500); }
@@ -2151,6 +2340,7 @@ async function loadFromServer() {
       if (r._levelConfig) _levelConfig = r._levelConfig;
       if (r.outfitState) outfitState = r.outfitState;
       if (r.roomState) roomState = r.roomState;
+      if (r.sceneZones) sceneZones = r.sceneZones;
       _dataVersion = serverVer;
       localStorage.setItem('habitrat:familyCode', familyCode);
       lastSyncTime = new Date(); syncStatus = 'ok'; updateSyncIndicator();
@@ -2276,6 +2466,7 @@ async function importBackup(file) {
     if (data.habitTemplates) habitTemplates = data.habitTemplates; if (data.rewardItems) rewardItems = data.rewardItems;
     if (data._levelConfig) _levelConfig = data._levelConfig;
     if (data.roomState) roomState = data.roomState;
+    if (data.sceneZones) sceneZones = data.sceneZones;
     saveData(); recomputeStreaks();
     refreshCurrentView(); updateHeader(); syncToServer(); showToast('✅ 数据已恢复');
     if (currentView === 'settings') renderSettings();
