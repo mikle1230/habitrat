@@ -827,7 +827,11 @@ body { font-family: var(--font-body); background: var(--body-bg); color: var(--i
   position: absolute; bottom: 20%; left: 50%;
   transform: translateX(-50%);
   text-align: center;
-  animation: rattyIdle 3.5s ease-in-out infinite;
+  animation: rattyFade .3s ease-out, rattyIdle 3.5s ease-in-out infinite;
+}
+@keyframes rattyFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes rattyIdle {
   0%,100%{transform:translateX(-50%) translateY(0)}
@@ -900,6 +904,9 @@ body { font-family: var(--font-body); background: var(--body-bg); color: var(--i
   33%{background:#FFE66D;box-shadow:0 0 4px #FFE66D}
   66%{background:#6BCB77;box-shadow:0 0 4px #6BCB77}
 }
+/* 编辑热区按钮暂时隐藏（功能保留），恢复时删除此行并将 SCENE_EDITOR_ENABLED 改为 true */
+.scene-room #btnSceneEditor { display: none !important; }
+
 .scene-back-btn {
   position: absolute; top: 8px; left: 8px; z-index: 100;
   background: rgba(45,51,64,.7); color: var(--hero-text);

@@ -1500,7 +1500,7 @@ function renderGrowthView() {
   const prog = getExpProgress(selectedMemberId);
   renderScene(selectedMemberId);
   switchScene('main'); // reset to main view
-  setTimeout(function() { var b = document.getElementById('btnSceneEditor'); if (b) b.style.display = 'block'; }, 300);
+  if (SCENE_EDITOR_ENABLED) setTimeout(function() { var b = document.getElementById('btnSceneEditor'); if (b) b.style.display = 'block'; }, 300);
   // 收藏品已集成到场景中（徽章墙），隐藏旧网格
   const gcGrid = document.getElementById('gcGrid');
   if (gcGrid) gcGrid.innerHTML = '';
@@ -1539,6 +1539,7 @@ function renderGrowthView() {
 var currentScene = 'main';
 // ========== 场景热区编辑器（?editor=1 启用） ==========
 var sceneEditorActive = false;
+const SCENE_EDITOR_ENABLED = false; // 暂时隐藏「编辑热区」按钮（功能保留），需要时改为 true 恢复
 
 // Show editor button (called after scene renders)
 setTimeout(function() {
@@ -1917,19 +1918,33 @@ var sceneImages = {
 };
 function switchScene(scene) {
   var bg = document.getElementById('sceneBgImg');
+  var rat = document.getElementById('sceneRat');
+  var isMain = scene === 'main';
+  // 过渡期间先隐藏 Ratty，等背景图加载完成（模糊结束）后再显示，避免在模糊背景上提前出现
+  if (rat) rat.style.display = 'none';
   if (bg) {
     bg.classList.add('switching');
-    setTimeout(function() {
-      bg.src = sceneImages[scene] || sceneImages.main;
+    var url = sceneImages[scene] || sceneImages.main;
+    var done = false;
+    function finish() {
+      if (done) return; done = true;
+      bg.src = url;
       bg.classList.remove('switching');
-    }, 200);
+      if (rat && isMain) rat.style.display = '';
+    }
+    var img = new Image();
+    img.onload = finish;
+    img.onerror = finish;
+    // 至少保持模糊过渡 200ms 可见（图片缓存命中时 onload 会立即触发，避免瞬间切换）
+    setTimeout(finish, 200);
+    img.src = url;
+  } else if (rat && isMain) {
+    rat.style.display = '';
   }
   currentScene = scene;
   var back = document.getElementById('sceneBackBtn');
   var room = document.getElementById('sceneRoom');
   var decos = document.getElementById('sceneDecos');
-  var rat = document.getElementById('sceneRat');
-  var isMain = scene === 'main';
   if (room) {
     room.classList.toggle('scene-main', isMain);
     room.classList.toggle('scene-desk', scene === 'desk');
@@ -1953,7 +1968,6 @@ function switchScene(scene) {
   }
   if (back) back.style.display = isMain ? 'none' : 'block';
   if (decos) decos.style.display = isMain ? '' : 'none';
-  if (rat) rat.style.display = isMain ? '' : 'none';
   // 场景提示
   var zhTL = document.getElementById('zoneHintTl');
   var zhTR = document.getElementById('zoneHintTr');
