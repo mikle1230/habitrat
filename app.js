@@ -3725,27 +3725,46 @@ function renderShopView() {
     });
   }
 
-  // 兑换记录
+  // 兑换记录（含退回记录）
   const recordsContainer = document.getElementById('shopRecords');
   if (recordsContainer) {
-    const records = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin')
+    const records = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'refund_coin'))
       .sort((a, b) => String(b.time || b.createdAt || '').localeCompare(String(a.time || a.createdAt || '')));
     if (records.length === 0) {
       recordsContainer.innerHTML = '<div style="margin-top:16px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">📜 兑换记录</div><div style="font-size:12px;color:var(--ink-soft);padding:8px 0;">还没有兑换记录</div></div>';
     } else {
       let html = '<div style="margin-top:16px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">📜 兑换记录（' + records.length + '）</div>'
-        + '<div style="max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--paper-deep);border-radius:10px;background:var(--card);">';
+        + '<div style="max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--paper-deep);border-radius:10px;background:var(--card);">';
       records.forEach(t => {
         const time = t.time || (t.createdAt || '');
-        const refunded = !!t.refunded;
-        html += '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--paper-deep);font-size:12px;' + (refunded ? 'opacity:.6;' : '') + '">'
-          + '<span style="color:var(--ink-soft);white-space:nowrap;flex-shrink:0;">' + time + '</span>'
-          + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (t.reason || '') + '</span>'
-          + (refunded
-              ? '<span style="color:var(--teal);font-size:11px;white-space:nowrap;flex-shrink:0;">↩️ 已退回</span>'
-              : '<button class="shop-refund-btn" data-tid="' + t.id + '" style="border:none;border-radius:6px;background:var(--paper-deep);color:var(--ink);padding:3px 8px;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0;">退回</button>')
-          + '<span style="font-weight:700;color:var(--coral);white-space:nowrap;flex-shrink:0;">-' + (t.amount || 0) + '</span>'
-          + '</div>';
+        if (t.type === 'refund_coin') {
+          // 退回记录
+          html += '<div style="padding:9px 12px;border-bottom:1px solid var(--paper-deep);">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;">'
+            + '<span style="color:var(--ink-soft);white-space:nowrap;">' + time + '</span>'
+            + '<span style="font-weight:700;color:var(--teal);white-space:nowrap;">+' + (t.amount || 0) + '</span>'
+            + '</div>'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;font-size:13px;">'
+            + '<span style="flex:1;min-width:0;word-break:break-all;">' + (t.reason || '') + (t.note ? '（' + t.note + '）' : '') + '</span>'
+            + '<span style="color:var(--teal);font-size:11px;white-space:nowrap;">↩️ 退回</span>'
+            + '</div>'
+            + '</div>';
+        } else {
+          // 兑换记录
+          const refunded = !!t.refunded;
+          html += '<div style="padding:9px 12px;border-bottom:1px solid var(--paper-deep);' + (refunded ? 'opacity:.6;' : '') + '">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;">'
+            + '<span style="color:var(--ink-soft);white-space:nowrap;">' + time + '</span>'
+            + '<span style="font-weight:700;color:var(--coral);white-space:nowrap;">-' + (t.amount || 0) + '</span>'
+            + '</div>'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;font-size:13px;">'
+            + '<span style="flex:1;min-width:0;word-break:break-all;">' + (t.reason || '') + (refunded && t.refundNote ? '（已退：' + t.refundNote + '）' : '') + '</span>'
+            + (refunded
+                ? '<span style="color:var(--teal);font-size:11px;white-space:nowrap;">↩️ 已退回</span>'
+                : '<button class="shop-refund-btn" data-tid="' + t.id + '" style="border:none;border-radius:6px;background:var(--paper-deep);color:var(--ink);padding:3px 8px;font-size:11px;cursor:pointer;white-space:nowrap;">退回</button>')
+            + '</div>'
+            + '</div>';
+        }
       });
       html += '</div></div>';
       recordsContainer.innerHTML = html;
@@ -3761,7 +3780,32 @@ function renderShopView() {
 
 }
 
-// 家长退回兑换（防止误操作；无时间限制，家长自行判断奖励是否已享受）
+// 退回理由输入弹窗（返回理由字符串；取消返回 null）
+function askRefundReason(t) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.className = 'modal-overlay show';
+    overlay.innerHTML = '<div class="modal-card" style="max-width:320px;padding:20px;text-align:left;">'
+      + '<div style="font-size:16px;font-weight:700;margin-bottom:4px;">↩️ 退回理由</div>'
+      + '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">退回「' + (t.reason || '') + '」的 ' + (t.amount || 0) + ' 金币，请说明原因</div>'
+      + '<textarea id="refundReasonInput" rows="2" placeholder="例如：误操作、奖励未享受" style="width:100%;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;resize:vertical;box-sizing:border-box;"></textarea>'
+      + '<div style="display:flex;gap:8px;margin-top:12px;">'
+      + '<button id="refundCancel" style="flex:1;padding:10px;border:2px solid var(--paper-deep);border-radius:10px;background:none;font-size:14px;cursor:pointer;">取消</button>'
+      + '<button id="refundOk" style="flex:1;padding:10px;border:none;border-radius:10px;background:var(--amber);color:var(--ink);font-size:14px;font-weight:700;cursor:pointer;">确定退回</button>'
+      + '</div></div>';
+    document.body.appendChild(overlay);
+    function close(r) { overlay.remove(); resolve(r); }
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(null); });
+    document.getElementById('refundCancel').onclick = function() { close(null); };
+    document.getElementById('refundOk').onclick = function() {
+      var v = document.getElementById('refundReasonInput').value;
+      if (!v.trim()) { showToast('请填写退回理由'); return; }
+      close(v.trim());
+    };
+  });
+}
+
+// 家长退回兑换（防止误操作；需 PIN + 填写理由；无时间限制，家长自行判断奖励是否已享受）
 async function refundExchange(t) {
   if (!t || t.type !== 'spend_coin' || t.refunded) return;
   // 家长 PIN 验证（未设置 PIN 则直接允许）
@@ -3772,10 +3816,14 @@ async function refundExchange(t) {
     });
     if (!p) return;
   }
-  if (!await showConfirm('退回「' + (t.reason || '') + '」的 ' + (t.amount || 0) + ' 金币？', true)) return;
+  // 填写退回理由
+  const note = await askRefundReason(t);
+  if (note === null) return; // 取消
+  if (!await showConfirm('退回「' + (t.reason || '') + '」的 ' + (t.amount || 0) + ' 金币？' + (note ? '（' + note + '）' : ''), true)) return;
   t.refunded = true;
-  transactions.push({ id: genId(), memberId: t.memberId, type: 'refund_coin', amount: t.amount, reason: '退回：' + (t.reason || ''), createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
-  logOp(getMemberName(t.memberId), '退回', (t.reason || '') + ' (+' + t.amount + ' Coin)');
+  t.refundNote = note;
+  transactions.push({ id: genId(), memberId: t.memberId, type: 'refund_coin', amount: t.amount, reason: '退回：' + (t.reason || ''), note: note, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
+  logOp(getMemberName(t.memberId), '退回', (t.reason || '') + ' (+' + t.amount + ' Coin)' + '（' + note + '）');
   saveData();
   showToast('↩️ 已退回 ' + t.amount + ' 金币');
   renderShopView();
