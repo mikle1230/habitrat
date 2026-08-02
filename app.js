@@ -256,7 +256,7 @@ function getGuardianMembers() { return members.filter(m => m.role === 'guardian'
 function getMemberName(id) { const m = getMemberById(id); return m ? m.name : '未知'; }
 function getMemberEmoji(id) { const m = getMemberById(id); if (!m) return '👤'; if (m.role === 'guardian') return '👩'; return '👧'; }
 function getCoinBalance(memberId) {
-  const earn = transactions.filter(t => t.memberId === memberId && (t.type === 'earn_coin' || t.type === 'bonus_coin')).reduce((s, t) => s + t.amount, 0);
+  const earn = transactions.filter(t => t.memberId === memberId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin')).reduce((s, t) => s + t.amount, 0);
   const spent = transactions.filter(t => t.memberId === memberId && (t.type === 'spend_coin' || t.type === 'deduct_coin')).reduce((s, t) => s + t.amount, 0);
   return earn - spent;
 }
@@ -318,6 +318,7 @@ function getRemain_old() { return getTotalEarned_old() - getTotalSpent_old(); }
 
 // ========== Date utilities ==========
 function fmtDateFull(d) { const y = d.getFullYear(), m = d.getMonth()+1, dd = d.getDate(); return y+'-'+String(m).padStart(2,'0')+'-'+String(dd).padStart(2,'0'); }
+function fmtDateTime(d) { return fmtDateFull(d) + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
 function fmtDate(d) { return (d.getMonth()+1)+'/'+d.getDate(); }
 function fmtDateCN(d) { return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'; }
 function getMonday(date) { const d = new Date(date); d.setHours(0,0,0,0); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); return d; }
@@ -1031,7 +1032,7 @@ function updatePeriodSummary(period) {
   let label = '', rangeStart, rangeEnd;
   if (period === 'today') {
     earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
     label = '今日'; rangeStart = todayStr; rangeEnd = todayStr;
     getActiveHabits().forEach(h => { if (isDayApplicable(h, today)) { totalAll++; if (getDayStatus(h, today) === '✓') totalDone++; } });
     document.getElementById('completionRow').style.display = 'none';
@@ -1039,7 +1040,7 @@ function updatePeriodSummary(period) {
     const mon = getMonday(today); const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     rangeStart = fmtDateFull(mon); rangeEnd = fmtDateFull(sun);
     earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
     label = '本周';
     for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); if (fmtDateFull(d) > todayStr) break; getActiveHabits().forEach(h => { if (!isDayApplicable(h, d)) return; totalAll++; if (getDayStatus(h, d) === '✓') totalDone++; }); }
     document.getElementById('completionRow').style.display = 'flex';
@@ -1047,7 +1048,7 @@ function updatePeriodSummary(period) {
   } else if (period === 'month') {
     const ym = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
     earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
     label = '本月';
     const cursor = new Date(today.getFullYear(), today.getMonth(), 1);
     while (cursor.getMonth() === today.getMonth()) { const ds = fmtDateFull(cursor); if (ds > todayStr) break; getActiveHabits().forEach(h => { if (!isDayApplicable(h, cursor)) return; totalAll++; if (getDayStatus(h, cursor) === '✓') totalDone++; }); cursor.setDate(cursor.getDate() + 1); }
@@ -2243,13 +2244,16 @@ function renderExchangeItems() {
     const el = document.getElementById('psiTotal'+idx); if (el) el.innerHTML = '= <b>'+(qty*item.cost)+'</b> 💰';
   }); });
   // Bind exchange button
-  document.querySelectorAll('.shop-spend-btn').forEach(btn => { btn.addEventListener('click', function(e) { e.stopPropagation();
+  document.querySelectorAll('.shop-spend-btn').forEach(btn => { btn.addEventListener('click', async function(e) { e.stopPropagation();
     const idx = parseInt(this.dataset.idx); const items = rewardItems.filter(r => r.kind === 'consumable');
     const item = items[idx]; if (!item) return;
     const qty = parseInt(document.querySelector('.psi-qty-input[data-idx="'+idx+'"]')?.value) || 1;
     const total = qty * item.cost;
     if (total <= 0 || total > getCoinBalance(selectedMemberId)) { showToast(total<=0?'请输入有效数量':'😅 Coin不够哦'); return; }
-    transactions.push({ id: genId(), memberId: selectedMemberId, type: 'spend_coin', amount: total, reason: item.title+' x'+qty, createdAt: fmtDateFull(new Date()) });
+    // 兑换前确认，防止误操作
+    const ok = await showConfirm('兑换「' + item.title + '」x' + qty + '，扣除 ' + total + ' 金币？', false);
+    if (!ok) return;
+    transactions.push({ id: genId(), memberId: selectedMemberId, type: 'spend_coin', amount: total, reason: item.title+' x'+qty, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
     logOp(getMemberName(selectedMemberId), '兑换', item.title+' x'+qty+' (-'+total+' Coin)');
     saveData(); showToast('🎉 兑换成功！'); updatePointsSheet();
   }); });
@@ -2290,7 +2294,7 @@ function renderPointsLog(monthKey) {
       const isNeg = t.type === 'spend_coin' || t.type === 'deduct_coin';
       const amtCls = isNeg ? 'negative' : (isExp ? 'exp' : 'positive');
       const sign = isNeg ? '-' : '+';
-      const label = t.type === 'spend_coin' ? '🛍️ 兑换' : t.type === 'deduct_coin' ? '⚠️ 扣分' : t.type === 'bonus_coin' ? '✨ 加分' : t.type === 'bonus_exp' ? '⭐ EXP奖励' : t.type === 'earn_exp' ? '📈 经验' : t.type === 'earn_coin' ? '💰 金币' : '📋 其他';
+      const label = t.type === 'spend_coin' ? '🛍️ 兑换' : t.type === 'refund_coin' ? '↩️ 退回' : t.type === 'deduct_coin' ? '⚠️ 扣分' : t.type === 'bonus_coin' ? '✨ 加分' : t.type === 'bonus_exp' ? '⭐ EXP奖励' : t.type === 'earn_exp' ? '📈 经验' : t.type === 'earn_coin' ? '💰 金币' : '📋 其他';
       html += '<div class="psl-item"><span class="psl-date">'+(t.createdAt||'').slice(5)+'</span><span class="psl-note">'+(getMemberName(t.memberId)||'')+' '+label+' '+(t.reason||'')+'</span><span class="psl-amount '+amtCls+'">'+sign+(t.amount||0)+'</span></div>';
     });
   }
@@ -3684,14 +3688,17 @@ function renderShopView() {
   });
   // Buy buttons
   conGrid.querySelectorAll('.shop-buy-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', async function() {
       const idx = parseInt(this.dataset.idx);
       const items = rewardItems.filter(r => r.kind === 'consumable');
       const item = items[idx]; if (!item) return;
       const qty = parseInt(conGrid.querySelector('.shop-qty-input[data-idx="' + idx + '"]')?.value) || 1;
       const total = item.cost * qty;
       if (total <= 0 || total > getCoinBalance(childId)) { showToast(total <= 0 ? '请输入数量' : '😅 金币不够哦'); return; }
-      transactions.push({ id: genId(), memberId: childId, type: 'spend_coin', amount: total, reason: item.title + ' x' + qty, createdAt: fmtDateFull(new Date()) });
+      // 兑换前确认，防止误操作
+      const ok = await showConfirm('兑换「' + item.title + '」x' + qty + '，扣除 ' + total + ' 金币？', false);
+      if (!ok) return;
+      transactions.push({ id: genId(), memberId: childId, type: 'spend_coin', amount: total, reason: item.title + ' x' + qty, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
       logOp(getMemberName(childId), '兑换', item.title + ' x' + qty + ' (-' + total + ' Coin)');
       saveData(); showToast('🎉 兑换成功！'); renderShopView();
     });
@@ -3718,6 +3725,60 @@ function renderShopView() {
     });
   }
 
+  // 兑换记录
+  const recordsContainer = document.getElementById('shopRecords');
+  if (recordsContainer) {
+    const records = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin')
+      .sort((a, b) => String(b.time || b.createdAt || '').localeCompare(String(a.time || a.createdAt || '')));
+    if (records.length === 0) {
+      recordsContainer.innerHTML = '<div style="margin-top:16px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">📜 兑换记录</div><div style="font-size:12px;color:var(--ink-soft);padding:8px 0;">还没有兑换记录</div></div>';
+    } else {
+      let html = '<div style="margin-top:16px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">📜 兑换记录（' + records.length + '）</div>'
+        + '<div style="max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--paper-deep);border-radius:10px;background:var(--card);">';
+      records.forEach(t => {
+        const time = t.time || (t.createdAt || '');
+        const refunded = !!t.refunded;
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--paper-deep);font-size:12px;' + (refunded ? 'opacity:.6;' : '') + '">'
+          + '<span style="color:var(--ink-soft);white-space:nowrap;flex-shrink:0;">' + time + '</span>'
+          + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (t.reason || '') + '</span>'
+          + (refunded
+              ? '<span style="color:var(--teal);font-size:11px;white-space:nowrap;flex-shrink:0;">↩️ 已退回</span>'
+              : '<button class="shop-refund-btn" data-tid="' + t.id + '" style="border:none;border-radius:6px;background:var(--paper-deep);color:var(--ink);padding:3px 8px;font-size:11px;cursor:pointer;white-space:nowrap;flex-shrink:0;">退回</button>')
+          + '<span style="font-weight:700;color:var(--coral);white-space:nowrap;flex-shrink:0;">-' + (t.amount || 0) + '</span>'
+          + '</div>';
+      });
+      html += '</div></div>';
+      recordsContainer.innerHTML = html;
+      // 绑定退回按钮
+      recordsContainer.querySelectorAll('.shop-refund-btn').forEach(b => {
+        b.addEventListener('click', function() {
+          const t = transactions.find(x => x.id === this.dataset.tid);
+          if (t) refundExchange(t);
+        });
+      });
+    }
+  }
+
+}
+
+// 家长退回兑换（防止误操作；无时间限制，家长自行判断奖励是否已享受）
+async function refundExchange(t) {
+  if (!t || t.type !== 'spend_coin' || t.refunded) return;
+  // 家长 PIN 验证（未设置 PIN 则直接允许）
+  if (parentPin) {
+    const p = await showPinModal({
+      title: '🔐 家长验证',
+      validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+    });
+    if (!p) return;
+  }
+  if (!await showConfirm('退回「' + (t.reason || '') + '」的 ' + (t.amount || 0) + ' 金币？', true)) return;
+  t.refunded = true;
+  transactions.push({ id: genId(), memberId: t.memberId, type: 'refund_coin', amount: t.amount, reason: '退回：' + (t.reason || ''), createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
+  logOp(getMemberName(t.memberId), '退回', (t.reason || '') + ' (+' + t.amount + ' Coin)');
+  saveData();
+  showToast('↩️ 已退回 ' + t.amount + ' 金币');
+  renderShopView();
 }
 
 // ========== 装扮视图渲染 ==========
