@@ -900,34 +900,64 @@ function spawnConfetti() {
 
 // ========== recomputeStreaks (dual-currency) ==========
 /** 核心引擎：遍历一年内的打卡数据，重算连续天数、发放 EXP/Coin、检测升级。每次打卡/编辑后必须调用 */
+
+/** 为历史交易补填 habitId（迁移辅助，idempotent） */
+function migrateTxHabitIds() {
+  var titleToId = {};
+  habitTemplates.forEach(function(h) { titleToId[h.title] = h.id; });
+  transactions.forEach(function(t) {
+    if (t.habitId) return; // 已有，跳过
+    if (t.type === 'earn_exp' && t.reason && t.reason.startsWith('[单次] ')) {
+      var title = t.reason.slice(4);
+      if (titleToId[title]) t.habitId = titleToId[title];
+    } else if (t.type === 'earn_coin' && t.reason && t.reason.indexOf(' 连续达标') > -1) {
+      var title2 = t.reason.replace(' 连续达标', '');
+      if (titleToId[title2]) t.habitId = titleToId[title2];
+    }
+  });
+}
+
 function recomputeStreaks() {
   streakState = {}; effectiveLog = {};
   const todayStr = fmtDateFull(new Date());
 
-  // 建立已处理记录索引：已发过 EXP/Coin 的日期+习惯 不再重复发放，保留历史分值
+  // 迁移：为历史交易补填 habitId（idempotent）
+  migrateTxHabitIds();
+
+  // 建立 habitId → habit 索引（含所有习惯，不限于活跃）
+  var allHabitsById = {};
+  habitTemplates.forEach(function(h) { allHabitsById[h.id] = h; });
+
+  // 建立已处理记录索引：已发过 EXP/Coin 的日期+habitId 不再重复发放，保留历史分值
   var earnedExpSet = {};
   var earnedCoinSet = {};
   transactions.forEach(function(t) {
-    if (t.type === 'earn_exp' && t.reason && t.reason.startsWith('[单次] ')) {
-      var key = t.createdAt + '|' + t.reason.slice(4); // date|habitTitle
-      earnedExpSet[key] = true;
+    if (t.type === 'earn_exp' && t.habitId) {
+      earnedExpSet[t.createdAt + '|' + t.habitId] = true;
+    } else if (t.type === 'earn_exp' && t.reason && t.reason.startsWith('[单次] ')) {
+      // 遗留交易无 habitId — 尝试匹配
+      var h1 = habitTemplates.find(function(x) { return x.title === t.reason.slice(4); });
+      if (h1) { t.habitId = h1.id; earnedExpSet[t.createdAt + '|' + h1.id] = true; }
     }
-    if (t.type === 'earn_coin' && t.reason && t.reason.indexOf(' 连续达标') > -1) {
-      earnedCoinSet[t.createdAt + '|' + t.reason] = true;
+    if (t.type === 'earn_coin' && t.habitId) {
+      earnedCoinSet[t.createdAt + '|' + t.habitId] = true;
+    } else if (t.type === 'earn_coin' && t.reason && t.reason.indexOf(' 连续达标') > -1) {
+      var title2 = t.reason.replace(' 连续达标', '');
+      var h2 = habitTemplates.find(function(x) { return x.title === title2; });
+      if (h2) { t.habitId = h2.id; earnedCoinSet[t.createdAt + '|' + h2.id] = true; }
     }
   });
 
-  // 清除孤儿交易：打卡状态已变为 ✗/○ 但交易还在的
+  // 孤儿检测：扫描 ALL 习惯（含归档），确保已归档习惯的交易不会被误删
   var validExpKeys = {};
   var validCoinKeys = {};
-  const cursor2 = new Date(); cursor2.setFullYear(cursor2.getFullYear() - 1);
+  var cursor2 = new Date(); cursor2.setFullYear(cursor2.getFullYear() - 1);
   while (fmtDateFull(cursor2) <= todayStr) {
     var ds2 = fmtDateFull(cursor2);
-    getActiveHabits().forEach(function(h) {
+    habitTemplates.forEach(function(h) {
       if (!isDayApplicable(h, cursor2)) return;
       if (getDayStatus(h, cursor2) === '✓') {
-        validExpKeys[ds2 + '|' + h.title] = true;
-        // Check if this day completes a streak (same logic as below)
+        validExpKeys[ds2 + '|' + h.id] = true;
         var sc = (streakState[h.id] && streakState[h.id].count) || 0;
         var prevDate = (streakState[h.id] && streakState[h.id].lastDate) || null;
         if (prevDate && datesConsecutive(new Date(prevDate), cursor2)) { sc++; }
@@ -937,7 +967,7 @@ function recomputeStreaks() {
         streakState[h.id].count = sc;
         streakState[h.id].lastDate = ds2;
         if (sc >= (h.streakNeed || 5)) {
-          validCoinKeys[ds2 + '|' + h.title + ' 连续达标'] = true;
+          validCoinKeys[ds2 + '|' + h.id] = true;
           streakState[h.id].count = 0;
           streakState[h.id].lastDate = null;
         }
@@ -947,13 +977,31 @@ function recomputeStreaks() {
     });
     cursor2.setDate(cursor2.getDate() + 1);
   }
-  // Remove orphan transactions (status changed but old tx remains)
+
+  // 剔除孤儿交易：仅删除「活跃习惯中打卡状态已变为 ✗/○ 但交易还在」的条目
+  // 已归档/已删除习惯的交易（habitId 不在活跃列表中）不在此过滤，始终保留
+  var activeHabitIds = {};
+  getActiveHabits().forEach(function(h) { activeHabitIds[h.id] = true; });
   transactions = transactions.filter(function(t) {
+    if (t.type === 'earn_exp' && t.habitId) {
+      if (!activeHabitIds[t.habitId]) return true; // 已归档/已删除的习惯，保留
+      return validExpKeys[t.createdAt + '|' + t.habitId];
+    }
+    if (t.type === 'earn_coin' && t.habitId) {
+      if (!activeHabitIds[t.habitId]) return true; // 已归档/已删除的习惯，保留
+      return validCoinKeys[t.createdAt + '|' + t.habitId];
+    }
+    // 无 habitId 的遗留 earn_exp（兜底，保留）
     if (t.type === 'earn_exp' && t.reason && t.reason.startsWith('[单次] ')) {
-      return validExpKeys[t.createdAt + '|' + t.reason.slice(4)];
+      var h3 = habitTemplates.find(function(x) { return x.title === t.reason.slice(4); });
+      if (h3) return validExpKeys[t.createdAt + '|' + h3.id];
+      return true; // 无法匹配，保留
     }
     if (t.type === 'earn_coin' && t.reason && t.reason.indexOf(' 连续达标') > -1) {
-      return validCoinKeys[t.createdAt + '|' + t.reason];
+      var title4 = t.reason.replace(' 连续达标', '');
+      var h4 = habitTemplates.find(function(x) { return x.title === title4; });
+      if (h4) return validCoinKeys[t.createdAt + '|' + h4.id];
+      return true; // 无法匹配，保留
     }
     return true;
   });
@@ -967,7 +1015,7 @@ function recomputeStreaks() {
     effectiveLog[h.id] = [];
   });
 
-  // Main computation pass: only add NEW transactions for unprocessed dates
+  // 主计算：只对活跃习惯补发未处理的日期
   var cursor = new Date(); cursor.setFullYear(cursor.getFullYear() - 1);
   while (fmtDateFull(cursor) <= todayStr) {
     var ds = fmtDateFull(cursor);
@@ -977,12 +1025,11 @@ function recomputeStreaks() {
       if (status === '✓') {
         var meta = getHabitMeta(h.id);
         var singleExp = h.expValue || meta.expValue || 10;
-        var expKey = ds + '|' + h.title;
-        // Only add earn_exp if not already processed (preserves historical value)
+        var expKey = ds + '|' + h.id;
         if (!earnedExpSet[expKey]) {
-          transactions.push({ id: genId(), memberId: meta.ownerMemberId, type: 'earn_exp', amount: singleExp, reason: '[单次] ' + h.title, createdAt: ds });
+          transactions.push({ id: genId(), habitId: h.id, memberId: meta.ownerMemberId, type: 'earn_exp', amount: singleExp, reason: '[单次] ' + h.title, createdAt: ds,
+            snapshot: { expValue: h.expValue || 10, coinValue: h.coinValue || 10, streakNeed: h.streakNeed || 5 } });
         }
-        // Recalculate member totalExp from ALL earn_exp transactions (not just new ones)
         var mem = getMemberById(meta.ownerMemberId);
         if (mem && !earnedExpSet[expKey]) mem.totalExp += singleExp;
 
@@ -995,10 +1042,10 @@ function recomputeStreaks() {
         if (streakState[h.id].count >= (h.streakNeed || 5)) {
           effectiveLog[h.id].push({ date: ds, pts: (h.expValue || h.coinValue || 10) * (h.streakNeed || 5) });
           var earnCoin = (h.coinValue || meta.coinValue || 10) * (h.streakNeed || 5);
-          var coinKey = ds + '|' + h.title + ' 连续达标';
-          // Only add earn_coin if not already processed
+          var coinKey = ds + '|' + h.id;
           if (!earnedCoinSet[coinKey]) {
-            transactions.push({ id: genId(), memberId: meta.ownerMemberId, type: 'earn_coin', amount: earnCoin, reason: h.title + ' 连续达标', createdAt: ds });
+            transactions.push({ id: genId(), habitId: h.id, memberId: meta.ownerMemberId, type: 'earn_coin', amount: earnCoin, reason: h.title + ' 连续达标', createdAt: ds,
+              snapshot: { expValue: h.expValue || 10, coinValue: h.coinValue || 10, streakNeed: h.streakNeed || 5 } });
           }
           streakState[h.id].count = 0;
           streakState[h.id].lastDate = null;
@@ -1016,6 +1063,7 @@ function recomputeStreaks() {
     }
   });
   checkLevelUps();
+  saveData(); // 修复 Bug F：每次 recompute 后立即持久化
 }
 
 function getEffPts(habitId) { return (effectiveLog[habitId]||[]).reduce((s,e) => s + e.pts, 0); }
@@ -1031,24 +1079,24 @@ function updatePeriodSummary(period) {
   let earned = 0, spent = 0, totalDone = 0, totalAll = 0;
   let label = '', rangeStart, rangeEnd;
   if (period === 'today') {
-    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
+    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin') && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin') && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
     label = '今日'; rangeStart = todayStr; rangeEnd = todayStr;
     getActiveHabits().forEach(h => { if (isDayApplicable(h, today)) { totalAll++; if (getDayStatus(h, today) === '✓') totalDone++; } });
     document.getElementById('completionRow').style.display = 'none';
   } else if (period === 'week') {
     const mon = getMonday(today); const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     rangeStart = fmtDateFull(mon); rangeEnd = fmtDateFull(sun);
-    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
+    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin') && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin') && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
     label = '本周';
     for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); if (fmtDateFull(d) > todayStr) break; getActiveHabits().forEach(h => { if (!isDayApplicable(h, d)) return; totalAll++; if (getDayStatus(h, d) === '✓') totalDone++; }); }
     document.getElementById('completionRow').style.display = 'flex';
     document.getElementById('completionLabel').textContent = '本周';
   } else if (period === 'month') {
     const ym = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
+    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin') && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin') && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
     label = '本月';
     const cursor = new Date(today.getFullYear(), today.getMonth(), 1);
     while (cursor.getMonth() === today.getMonth()) { const ds = fmtDateFull(cursor); if (ds > todayStr) break; getActiveHabits().forEach(h => { if (!isDayApplicable(h, cursor)) return; totalAll++; if (getDayStatus(h, cursor) === '✓') totalDone++; }); cursor.setDate(cursor.getDate() + 1); }
@@ -3023,7 +3071,7 @@ function updateStatusBar() {
     }
   }
   // 金币相关
-  const earnedCoin = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin')).reduce((s, t) => s + t.amount, 0);
+  const earnedCoin = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin')).reduce((s, t) => s + t.amount, 0);
   let pendingCoin = 0;
   getActiveHabits().forEach(h => {
     const meta = getHabitMeta(h.id);
@@ -3031,7 +3079,7 @@ function updateStatusBar() {
     const sc = getStreakCount(h.id);
     if (sc > 0) pendingCoin += (h.coinValue || meta.coinValue || 10) * sc;
   });
-  const spentCoin = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin').reduce((s, t) => s + t.amount, 0);
+  const spentCoin = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin')).reduce((s, t) => s + t.amount, 0);
   document.getElementById('statusCoinBal').textContent = coin;
   document.getElementById('statusPendingCoin').textContent = pendingCoin;
   document.getElementById('statusSpentVal').textContent = spentCoin;
@@ -3060,7 +3108,7 @@ function updateStatusBar() {
 function showCoinSources() {
   const childId = getChildMembers()[0]?.id || selectedMemberId || members[0]?.id;
   if (!childId) return;
-  const txns = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin')).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const txns = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin')).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   let html = '';
   if (txns.length === 0) {
     html = '<div style="text-align:center;color:var(--ink-soft);padding:20px;">暂无金币记录</div>';
@@ -3195,6 +3243,7 @@ function renderSettings() {
   renderMemberSettings();
   // Habits
   renderHabitSettings();
+  setupBackfillSection();
   // Family code & invite
   if (!familyCode) { familyCode = generateFamilyCode(); localStorage.setItem('habitrat:familyCode', familyCode); saveData(true); }
   var fcEl = document.getElementById('ssFamilyCode'); if (fcEl) fcEl.textContent = familyCode;
@@ -3323,6 +3372,80 @@ function renderHabitSettings() {
       document.getElementById('ssAddHabitForm').style.display = 'none';
     };
   };
+}
+function setupBackfillSection() {
+  var today = new Date(); today.setHours(0,0,0,0);
+  var todayStr = fmtDateFull(today);
+  var maxPast = new Date(today); maxPast.setDate(today.getDate() - 45);
+  var maxPastStr = fmtDateFull(maxPast);
+  var yesterdayStr = fmtDateFull(new Date(today.getTime() - 86400000));
+
+  // 设置日期输入限制
+  var startEl = document.getElementById('ssBackfillStart');
+  var endEl = document.getElementById('ssBackfillEnd');
+  if (startEl) { startEl.min = maxPastStr; startEl.max = yesterdayStr; startEl.value = maxPastStr; }
+  if (endEl) { endEl.min = maxPastStr; endEl.max = yesterdayStr; endEl.value = yesterdayStr; }
+
+  // 渲染习惯多选框
+  var habitsContainer = document.getElementById('ssBackfillHabits');
+  if (!habitsContainer) return;
+  var activeHabits = getActiveHabits();
+  var html = '';
+  activeHabits.forEach(function(h) {
+    html += '<label style="display:flex;align-items:center;gap:4px;font-size:12px;padding:4px 8px;background:var(--paper);border-radius:6px;cursor:pointer;">'
+      + '<input type="checkbox" class="ss-backfill-habit" value="' + h.id + '" checked>'
+      + (h.emoji || '📌') + ' ' + h.title + '</label>';
+  });
+  habitsContainer.innerHTML = html;
+
+  // 按钮事件
+  var btn = document.getElementById('ssBackfillBtn');
+  if (!btn) return;
+  // 移除旧事件避免重复绑定
+  var newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.addEventListener('click', async function() {
+    var startVal = document.getElementById('ssBackfillStart').value;
+    var endVal = document.getElementById('ssBackfillEnd').value;
+    if (!startVal || !endVal) { showToast('请选择日期范围'); return; }
+    if (startVal > endVal) { showToast('开始日期不能晚于结束日期'); return; }
+
+    var selectedIds = [];
+    document.querySelectorAll('.ss-backfill-habit:checked').forEach(function(cb) { selectedIds.push(cb.value); });
+    if (selectedIds.length === 0) { showToast('请至少选择一个习惯'); return; }
+
+    // 确认
+    var startD = new Date(startVal + 'T00:00:00');
+    var endD = new Date(endVal + 'T00:00:00');
+    var dayCount = Math.floor((endD - startD) / 86400000) + 1;
+    var habitNames = selectedIds.map(function(id) {
+      var h = habitTemplates.find(function(x) { return x.id === id; });
+      return h ? h.title : id;
+    }).join('、');
+    if (!await showConfirm('将「' + habitNames + '」\n从 ' + startVal + ' 到 ' + endVal + '（共 ' + dayCount + ' 天）\n全部设为 ✓ 完成？\n\n完成后会自动重算积分。', true)) return;
+
+    // 执行：遍历每一天、每个习惯，设为 ✓
+    var cursor = new Date(startD);
+    while (cursor <= endD) {
+      var ds = fmtDateFull(cursor);
+      selectedIds.forEach(function(hid) {
+        var h = habitTemplates.find(function(x) { return x.id === hid; });
+        if (h && isDayApplicable(h, cursor)) {
+          // 使用 setDayStatus 直接写入
+          var wk = getWeekKey(cursor);
+          var di = getDayOfWeek(cursor);
+          if (!checks[wk]) checks[wk] = {};
+          if (!checks[wk][hid]) checks[wk][hid] = ['○','○','○','○','○','○','○'];
+          checks[wk][hid][di] = '✓';
+        }
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    saveData();
+    recomputeStreaks();
+    updateHeader();
+    showToast('✅ 已补充 ' + dayCount + ' 天 × ' + selectedIds.length + ' 项打卡，积分已重算');
+  });
 }
 function renderRewardSettings() {
   const c = document.getElementById('ssRewards'); let html = '';
@@ -3751,17 +3874,25 @@ function renderShopView() {
             + '</div>';
         } else {
           // 兑换记录
-          const refunded = !!t.refunded;
-          html += '<div style="padding:9px 12px;border-bottom:1px solid var(--paper-deep);' + (refunded ? 'opacity:.6;' : '') + '">'
+          var refundedAmt = t.refundedAmount || 0;
+          var fullyRefunded = refundedAmt >= t.amount;
+          var txTime = t.time ? new Date(t.time) : null;
+          var refundExpired = txTime && (new Date() - txTime > 3600000);
+          var canRefund = !fullyRefunded && !refundExpired;
+          html += '<div style="padding:9px 12px;border-bottom:1px solid var(--paper-deep);' + (fullyRefunded ? 'opacity:.6;' : '') + '">'
             + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;">'
             + '<span style="color:var(--ink-soft);white-space:nowrap;">' + time + '</span>'
             + '<span style="font-weight:700;color:var(--coral);white-space:nowrap;">-' + (t.amount || 0) + '</span>'
             + '</div>'
             + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;font-size:13px;">'
-            + '<span style="flex:1;min-width:0;word-break:break-all;">' + (t.reason || '') + (refunded && t.refundNote ? '（已退：' + t.refundNote + '）' : '') + '</span>'
-            + (refunded
-                ? '<span style="color:var(--teal);font-size:11px;white-space:nowrap;">↩️ 已退回</span>'
-                : '<button class="shop-refund-btn" data-tid="' + t.id + '" style="border:none;border-radius:6px;background:var(--paper-deep);color:var(--ink);padding:3px 8px;font-size:11px;cursor:pointer;white-space:nowrap;">退回</button>')
+            + '<span style="flex:1;min-width:0;word-break:break-all;">' + (t.reason || '') + (refundedAmt > 0 ? '（已退：' + refundedAmt + '/' + t.amount + ' 🪙）' : '') + '</span>'
+            + (fullyRefunded
+                ? '<span style="color:var(--teal);font-size:11px;white-space:nowrap;">↩️ 已全退</span>'
+                : refundedAmt > 0
+                  ? '<button class="shop-refund-btn" data-tid="' + t.id + '" style="border:none;border-radius:6px;background:var(--paper-deep);color:var(--ink);padding:3px 8px;font-size:11px;cursor:pointer;white-space:nowrap;">退剩余(' + (t.amount - refundedAmt) + '🪙)</button>'
+                  : (canRefund
+                      ? '<button class="shop-refund-btn" data-tid="' + t.id + '" style="border:none;border-radius:6px;background:var(--paper-deep);color:var(--ink);padding:3px 8px;font-size:11px;cursor:pointer;white-space:nowrap;">退回</button>'
+                      : (refundExpired ? '<span style="color:var(--ink-soft);font-size:11px;white-space:nowrap;">已超时</span>' : '')))
             + '</div>'
             + '</div>';
         }
@@ -3780,14 +3911,19 @@ function renderShopView() {
 
 }
 
-// 退回理由输入弹窗（返回理由字符串；取消返回 null）
+// 退回弹窗（含金额输入 + 理由；返回 {amount, note}；取消返回 null）
 function askRefundReason(t) {
+  var maxRefund = t.amount - (t.refundedAmount || 0);
   return new Promise(function(resolve) {
     var overlay = document.createElement('div');
     overlay.className = 'modal-overlay show';
     overlay.innerHTML = '<div class="modal-card" style="max-width:320px;padding:20px;text-align:left;">'
-      + '<div style="font-size:16px;font-weight:700;margin-bottom:4px;">↩️ 退回理由</div>'
-      + '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">退回「' + (t.reason || '') + '」的 ' + (t.amount || 0) + ' 金币，请说明原因</div>'
+      + '<div style="font-size:16px;font-weight:700;margin-bottom:4px;">↩️ 退回金币</div>'
+      + '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">退回「' + (t.reason || '') + '」（总额 ' + (t.amount || 0) + ' 🪙，已退 ' + (t.refundedAmount || 0) + ' 🪙，剩余可退 ' + maxRefund + ' 🪙）</div>'
+      + '<div style="margin-bottom:10px;display:flex;gap:6px;align-items:center;">'
+      + '<span style="font-size:13px;white-space:nowrap;">退回数量</span>'
+      + '<input id="refundAmountInput" type="number" value="' + maxRefund + '" min="1" max="' + maxRefund + '" style="flex:1;width:60px;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;text-align:center;">'
+      + '<span style="font-size:13px;white-space:nowrap;">🪙</span></div>'
       + '<textarea id="refundReasonInput" rows="2" placeholder="例如：误操作、奖励未享受" style="width:100%;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;resize:vertical;box-sizing:border-box;"></textarea>'
       + '<div style="display:flex;gap:8px;margin-top:12px;">'
       + '<button id="refundCancel" style="flex:1;padding:10px;border:2px solid var(--paper-deep);border-radius:10px;background:none;font-size:14px;cursor:pointer;">取消</button>'
@@ -3798,34 +3934,47 @@ function askRefundReason(t) {
     overlay.addEventListener('click', function(e) { if (e.target === overlay) close(null); });
     document.getElementById('refundCancel').onclick = function() { close(null); };
     document.getElementById('refundOk').onclick = function() {
-      var v = document.getElementById('refundReasonInput').value;
-      if (!v.trim()) { showToast('请填写退回理由'); return; }
-      close(v.trim());
+      var amount = parseInt(document.getElementById('refundAmountInput').value) || 0;
+      var note = document.getElementById('refundReasonInput').value.trim();
+      if (!note) { showToast('请填写退回理由'); return; }
+      if (amount < 1 || amount > maxRefund) { showToast('退回数量需在 1~' + maxRefund + ' 之间'); return; }
+      close({ amount: amount, note: note });
     };
   });
 }
 
-// 家长退回兑换（防止误操作；需 PIN + 填写理由；无时间限制，家长自行判断奖励是否已享受）
+// 家长退回兑换（支持部分退款 + 1 小时时效；需 PIN + 填写理由）
 async function refundExchange(t) {
-  if (!t || t.type !== 'spend_coin' || t.refunded) return;
+  if (!t || t.type !== 'spend_coin') return;
+  var refunded = t.refundedAmount || 0;
+  if (refunded >= t.amount) return; // 已全退
+  // 1 小时时效检查
+  var txTime = t.time ? new Date(t.time) : null;
+  if (txTime && (new Date() - txTime > 3600000)) {
+    showToast('⏰ 已超过 1 小时退款时效，无法退回');
+    return;
+  }
   // 家长 PIN 验证（未设置 PIN 则直接允许）
   if (parentPin) {
-    const p = await showPinModal({
+    var p = await showPinModal({
       title: '🔐 家长验证',
       validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
     });
     if (!p) return;
   }
-  // 填写退回理由
-  const note = await askRefundReason(t);
-  if (note === null) return; // 取消
-  if (!await showConfirm('退回「' + (t.reason || '') + '」的 ' + (t.amount || 0) + ' 金币？' + (note ? '（' + note + '）' : ''), true)) return;
-  t.refunded = true;
-  t.refundNote = note;
-  transactions.push({ id: genId(), memberId: t.memberId, type: 'refund_coin', amount: t.amount, reason: '退回：' + (t.reason || ''), note: note, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
-  logOp(getMemberName(t.memberId), '退回', (t.reason || '') + ' (+' + t.amount + ' Coin)' + '（' + note + '）');
+  // 填写退回金额和理由
+  var result = await askRefundReason(t);
+  if (result === null) return; // 取消
+  var partialAmount = result.amount;
+  var note = result.note;
+  if (!await showConfirm('退回「' + (t.reason || '') + '」的 ' + partialAmount + ' / ' + t.amount + ' 金币？' + (note ? '（' + note + '）' : ''), true)) return;
+  t.refundedAmount = (t.refundedAmount || 0) + partialAmount;
+  t.refundNote = (t.refundNote ? t.refundNote + '; ' : '') + note;
+  var reasonText = '退回：' + (t.reason || '') + (partialAmount < t.amount ? '（部分 ' + partialAmount + '/' + t.amount + '）' : '');
+  transactions.push({ id: genId(), memberId: t.memberId, type: 'refund_coin', amount: partialAmount, reason: reasonText, note: note, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
+  logOp(getMemberName(t.memberId), '退回', (t.reason || '') + ' (+' + partialAmount + '/' + t.amount + ' Coin)' + '（' + note + '）');
   saveData();
-  showToast('↩️ 已退回 ' + t.amount + ' 金币');
+  showToast('↩️ 已退回 ' + partialAmount + ' 金币' + (t.refundedAmount >= t.amount ? '（已全额退回）' : '（剩余可退 ' + (t.amount - t.refundedAmount) + ' 🪙）'));
   renderShopView();
 }
 

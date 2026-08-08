@@ -272,6 +272,17 @@
     <!-- 3. 习惯管理（高频） -->
     <div class="ss-group-title">📋 习惯</div>
     <div class="ss-section"><div class="sss-title">习惯管理</div><div id="ssHabits"></div><button class="add-btn" id="ssAddHabit">＋ 添加习惯</button></div>
+    <!-- 3.5 补充打卡 -->
+    <div class="ss-section"><div class="sss-title">📅 补充历史打卡</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">补充今天往前最多 45 天内的打卡记录</div>
+      <div class="ss-row" style="align-items:center;">
+        <input type="date" id="ssBackfillStart" style="padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;flex:1;">
+        <span style="font-size:13px;color:var(--ink-soft);">至</span>
+        <input type="date" id="ssBackfillEnd" style="padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;flex:1;">
+      </div>
+      <div id="ssBackfillHabits" style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;"></div>
+      <button id="ssBackfillBtn" style="width:100%;padding:10px;background:var(--amber);color:var(--ink);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">📅 批量补充打卡</button>
+    </div>
     <!-- 4. 假期设置 -->
     <div class="ss-group-title">🏖 假期</div>
     <div class="ss-section"><div class="sss-title">寒暑假日期</div><div id="vacationList"></div><button class="add-btn" id="addVacation">＋ 添加假期区间</button></div>
