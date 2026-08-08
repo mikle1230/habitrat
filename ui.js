@@ -2048,8 +2048,8 @@ function showCoinSources() {
   } else {
     const total = txns.reduce((s, t) => s + t.amount, 0);
     txns.forEach(t => {
-      const dateStr = t.createdAt ? t.createdAt.slice(0, 10) : '';
-      html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">' + (t.reason || t.type) + '</div><div class="css-date">' + dateStr + '</div></div><span class="css-amt">💰 +' + t.amount + '</span></div>';
+      const timeStr = t.time || (t.createdAt ? t.createdAt.slice(0, 16) : '');
+      html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">' + (t.reason || t.type) + '</div><div class="css-date">' + timeStr + '</div></div><span class="css-amt">💰 +' + t.amount + '</span></div>';
     });
     html += '<div class="css-total"><span>合计</span><span style="color:var(--amber-deep);">💰 ' + total + '</span></div>';
   }
@@ -2074,20 +2074,20 @@ function showSpentHistory() {
   } else {
     var totalSpent = 0, totalRefunded = 0
     records.forEach(function(t) {
-      var dateStr = t.createdAt ? t.createdAt.slice(0, 10) : ''
+      var timeStr = t.time || (t.createdAt ? t.createdAt.slice(0, 16) : '')
       var isRefund = t.type === 'refund_coin'
       var isDeduct = t.type === 'deduct_coin'
       if (isRefund) {
         totalRefunded += t.amount
-        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason" style="color:var(--teal);">↩️ ' + (t.reason || '退回') + '</div><div class="css-date">' + dateStr + '</div></div><span class="css-amt" style="color:var(--teal);">+' + t.amount + '</span></div>'
+        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason" style="color:var(--teal);">↩️ ' + (t.reason || '退回') + '</div><div class="css-date">' + timeStr + '</div></div><span class="css-amt" style="color:var(--teal);">+' + t.amount + '</span></div>'
       } else if (isDeduct) {
         totalSpent += t.amount
-        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">⚠️ ' + (t.reason || '扣分') + '</div><div class="css-date">' + dateStr + '</div></div><span class="css-amt" style="color:var(--coral);">-' + t.amount + '</span></div>'
+        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">⚠️ ' + (t.reason || '扣分') + '</div><div class="css-date">' + timeStr + '</div></div><span class="css-amt" style="color:var(--coral);">-' + t.amount + '</span></div>'
       } else {
         totalSpent += t.amount
         var refunded = t.refundedAmount || 0
         var refundMark = refunded > 0 ? ' <span style="font-size:10px;color:var(--teal);">(已退' + refunded + ')</span>' : ''
-        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">🛍️ ' + (t.reason || '兑换') + refundMark + '</div><div class="css-date">' + dateStr + '</div></div><span class="css-amt">-' + t.amount + '</span></div>'
+        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">🛍️ ' + (t.reason || '兑换') + refundMark + '</div><div class="css-date">' + timeStr + '</div></div><span class="css-amt">-' + t.amount + '</span></div>'
       }
     })
     var netSpent = totalSpent - totalRefunded
@@ -2491,7 +2491,7 @@ function renderCustomEventCard(ci, options) {
   var chk = isDone?'✓':(isMiss?'✗':'');
   var html = '<div class="quest-card custom-event'+cls+'" data-custom="'+ci.id+'" data-date="'+ci.date+'">'
     + '<div class="quest-check">'+chk+'</div>'
-    + '<div class="quest-icon">📌</div>'
+    + '<div class="quest-icon">'+(ci.emoji||'📌')+'</div>'
     + '<div class="quest-info">'
     + '<div class="quest-title">'+ci.title+'</div>'
     + '<div class="quest-sub-row"><div class="quest-sub">'+(ci.detail||'')+'</div>';
@@ -2503,12 +2503,23 @@ function renderCustomEventCard(ci, options) {
 }
 
 function renderCustomEventAddForm(prefix) {
-  return '<div id="'+prefix+'AddRow" style="margin-top:8px;">'
-    + '<button id="'+prefix+'ShowForm" style="width:100%;padding:10px;border:2px dashed var(--paper-deep);border-radius:12px;background:none;font-size:13px;color:var(--ink-soft);cursor:pointer;">＋ 添加自定义事件</button>'
-    + '<div id="'+prefix+'Form" style="display:none;padding:12px;border:2px solid var(--paper-deep);border-radius:12px;margin-top:6px;">'
-    + '<input id="'+prefix+'Title" placeholder="事件名称" style="width:100%;padding:8px 10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;margin-bottom:6px;">'
-    + '<input id="'+prefix+'Detail" placeholder="内容说明（可选）" style="width:100%;padding:8px 10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;margin-bottom:6px;">'
-    + '<div style="display:flex;gap:6px;"><span style="font-size:12px;">EXP</span><input id="'+prefix+'Exp" type="number" value="5" min="0" style="width:60px;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;"><span style="font-size:12px;">💰</span><input id="'+prefix+'Coin" type="number" value="5" min="0" style="width:60px;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;"><button id="'+prefix+'Save" style="padding:8px 16px;background:var(--amber);color:var(--ink);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">添加</button></div>'
+  var defaultEmoji = '📌';
+  var prefixed = function(id) { return prefix + id; };
+  var emojiGrid = '<div style="margin-bottom:6px;"><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;" id="'+prefixed('EmojiGrid')+'">';
+  HABIT_EMOJI_OPTIONS.forEach(function(e, i) {
+    emojiGrid += '<span class="emoji-opt" style="font-size:18px;cursor:pointer;padding:2px 4px;border-radius:5px;'+(i===0?'background:var(--surface-tab);border:2px solid var(--steel);':'border:2px solid transparent;')+'" data-emoji="'+e+'" onclick="var g=document.getElementById(\''+prefixed('EmojiGrid')+'\');g.querySelectorAll(\'.emoji-opt\').forEach(function(s){s.style.background=\'\';s.style.border=\'2px solid transparent\'});this.style.background=\'var(--surface-tab)\';this.style.border=\'2px solid var(--steel)\';document.getElementById(\''+prefixed('Emoji')+'\').value=this.dataset.emoji;var ci3=document.getElementById(\''+prefixed('EmojiCustom')+'\');if(ci3)ci3.value=\'\'">'+e+'</span>';
+  });
+  emojiGrid += '<input type="text" id="'+prefixed('EmojiCustom')+'" placeholder="自选" maxlength="2" style="width:38px;padding:3px 2px;border:2px solid var(--paper-deep);border-radius:5px;font-size:13px;text-align:center;" oninput="var v=this.value;document.getElementById(\''+prefixed('Emoji')+'\').value=v||\''+defaultEmoji+'\';if(v){var g=document.getElementById(\''+prefixed('EmojiGrid')+'\');g.querySelectorAll(\'.emoji-opt\').forEach(function(s){s.style.background=\'\';s.style.border=\'2px solid transparent\'})}">';
+  emojiGrid += '</div><input type="hidden" id="'+prefixed('Emoji')+'" value="'+defaultEmoji+'"></div>';
+  var memberOpts = members.map(function(m){return '<option value="'+m.id+'">'+m.name+'</option>';}).join('');
+  return '<div id="'+prefixed('AddRow')+'" style="margin-top:8px;">'
+    + '<button id="'+prefixed('ShowForm')+'" style="width:100%;padding:10px;border:2px dashed var(--paper-deep);border-radius:12px;background:none;font-size:13px;color:var(--ink-soft);cursor:pointer;">＋ 添加自定义事件</button>'
+    + '<div id="'+prefixed('Form')+'" style="display:none;padding:12px;border:2px solid var(--paper-deep);border-radius:12px;margin-top:6px;">'
+    + '<input id="'+prefixed('Title')+'" placeholder="事件名称" style="width:100%;padding:8px 10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;margin-bottom:6px;">'
+    + '<input id="'+prefixed('Detail')+'" placeholder="内容说明（可选）" style="width:100%;padding:8px 10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;margin-bottom:6px;">'
+    + emojiGrid
+    + '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><span style="font-size:12px;color:var(--ink-soft);">归属</span><select id="'+prefixed('Member')+'" style="flex:1;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;">'+memberOpts+'</select></div>'
+    + '<div style="display:flex;gap:6px;"><span style="font-size:12px;">EXP</span><input id="'+prefixed('Exp')+'" type="number" value="5" min="0" style="width:60px;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;"><span style="font-size:12px;">💰</span><input id="'+prefixed('Coin')+'" type="number" value="5" min="0" style="width:60px;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;"><button id="'+prefixed('Save')+'" style="padding:8px 16px;background:var(--amber);color:var(--ink);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">添加</button></div>'
     + '</div></div>';
 }
 
@@ -2522,7 +2533,9 @@ function bindCustomEventAddForm(prefix, dateStr, onSaved) {
     var d = document.getElementById(prefix+'Detail').value.trim();
     var ex = parseInt(document.getElementById(prefix+'Exp').value)||0;
     var co = parseInt(document.getElementById(prefix+'Coin').value)||0;
-    customItems.push({ id:genId(), date:dateStr, title:t, detail:d, expValue:ex, coinValue:co, status:'○' });
+    var em = document.getElementById(prefix+'Emoji').value||'📌';
+    var mi = document.getElementById(prefix+'Member').value||'';
+    customItems.push({ id:genId(), date:dateStr, title:t, detail:d, emoji:em, ownerMemberId:mi, expValue:ex, coinValue:co, status:'○' });
     saveData(); showToast('✅ 已添加');
     if (onSaved) onSaved();
   });
@@ -2598,9 +2611,10 @@ function showDayDetail(date) {
         // Three-way cycle: ○ → ✓ → ✗ → ○
         if (ci.status === '○' || ci.status === '') {
           ci.status = '✓';
-          transactions.push({ id: genId(), memberId: childId, type: 'earn_exp', amount: ci.expValue ?? 5, reason: '[自定义] '+ci.title, createdAt: ci.date });
-          transactions.push({ id: genId(), memberId: childId, type: 'earn_coin', amount: ci.coinValue ?? 5, reason: '[自定义] '+ci.title, createdAt: ci.date });
-          const mem = getMemberById(childId); if (mem) mem.totalExp += (ci.expValue ?? 5);
+          const effMemberId = ci.ownerMemberId || childId;
+          transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_exp', amount: ci.expValue ?? 5, reason: '[自定义] '+ci.title, createdAt: ci.date });
+          transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_coin', amount: ci.coinValue ?? 5, reason: '[自定义] '+ci.title, createdAt: ci.date });
+          const mem = getMemberById(effMemberId); if (mem) mem.totalExp += (ci.expValue ?? 5);
           recomputeStreaks(); saveData(); showDayDetail(d); updateStatusBar(); checkLevelUps();
         } else if (ci.status === '✓') {
           ci.status = '✗';
@@ -2694,9 +2708,10 @@ function renderHomeView() {
       if (ci.status === '○' || ci.status === '') {
         ci.status = '✓';
         const exp = ci.expValue ?? 5; const coin = ci.coinValue ?? 5;
-        transactions.push({ id: genId(), memberId: childId, type: 'earn_exp', amount: exp, reason: '[自定义] ' + ci.title, createdAt: ci.date });
-        transactions.push({ id: genId(), memberId: childId, type: 'earn_coin', amount: coin, reason: '[自定义] ' + ci.title, createdAt: ci.date });
-        const mem = getMemberById(childId); if (mem) mem.totalExp += exp;
+        const effMemberId = ci.ownerMemberId || childId;
+        transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_exp', amount: exp, reason: '[自定义] ' + ci.title, createdAt: ci.date });
+        transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_coin', amount: coin, reason: '[自定义] ' + ci.title, createdAt: ci.date });
+        const mem = getMemberById(effMemberId); if (mem) mem.totalExp += exp;
         recomputeStreaks();
         saveData(); renderHomeView(); updateStatusBar(); showToast('✅ 完成！');
         checkLevelUps();

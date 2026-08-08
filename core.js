@@ -337,7 +337,7 @@ function getRemain_old() { return getTotalEarned_old() - getTotalSpent_old(); }
 
 // ========== Date utilities ==========
 function fmtDateFull(d) { const y = d.getFullYear(), m = d.getMonth()+1, dd = d.getDate(); return y+'-'+String(m).padStart(2,'0')+'-'+String(dd).padStart(2,'0'); }
-function fmtDateTime(d) { return fmtDateFull(d) + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
+function fmtDateTime(d) { return fmtDateFull(d) + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0'); }
 function fmtDate(d) { return (d.getMonth()+1)+'/'+d.getDate(); }
 function fmtDateCN(d) { return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'; }
 function getMonday(date) { const d = new Date(date); d.setHours(0,0,0,0); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); return d; }

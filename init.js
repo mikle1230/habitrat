@@ -161,7 +161,7 @@ function init() {
       if (pts <= 0) { showToast('请输入有效分值'); return; }
       if (pts > getCoinBalance(selectedMemberId)) { showToast('😅 Coin不够扣'); return; }
       const reason = document.getElementById('psDeductReason').value;
-      transactions.push({ id: genId(), memberId: selectedMemberId, type: 'deduct_coin', amount: pts, reason: reason, createdAt: fmtDateFull(new Date()) });
+      transactions.push({ id: genId(), memberId: selectedMemberId, type: 'deduct_coin', amount: pts, reason: reason, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
       logOp(getMemberName(selectedMemberId), '扣分', reason+' (-'+pts+' Coin)');
       saveData(); showToast('⚠️ 已扣 ' + pts + ' Coin（EXP不受影响）');
       document.getElementById('psDeductPts').value = '5'; updatePointsSheet();
@@ -176,11 +176,11 @@ function init() {
       if (!name) { showToast('请输入事件名称'); return; }
       if (coinPts <= 0) { showToast('请输入有效分值'); return; }
       const note = detail ? name + '（' + detail + '）' : name;
-      transactions.push({ id: genId(), memberId: selectedMemberId, type: 'bonus_coin', amount: coinPts, reason: note, createdAt: fmtDateFull(new Date()) });
+      transactions.push({ id: genId(), memberId: selectedMemberId, type: 'bonus_coin', amount: coinPts, reason: note, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
       logOp(getMemberName(selectedMemberId), '加分', note+' (+'+coinPts+' Coin)');
       if (document.getElementById('psBonusExp').checked) {
         const expPts = parseInt(document.getElementById('psBonusExpVal').value) || coinPts;
-        transactions.push({ id: genId(), memberId: selectedMemberId, type: 'bonus_exp', amount: expPts, reason: note + ' (额外EXP)', createdAt: fmtDateFull(new Date()) });
+        transactions.push({ id: genId(), memberId: selectedMemberId, type: 'bonus_exp', amount: expPts, reason: note + ' (额外EXP)', createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
         const mem = getMemberById(selectedMemberId); if (mem) mem.totalExp += expPts;
         logOp(getMemberName(selectedMemberId), 'EXP奖励', note+' (+'+expPts+' EXP)');
       }

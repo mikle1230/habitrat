@@ -273,15 +273,28 @@ function showModalForm(title, fieldsHtml, onConfirm) {
 
 // ========== 自定义事件编辑弹窗 ==========
 function showCiEditForm(ci, onSave) {
+  var curEmoji = ci.emoji || '📌';
+  var isCustomEmoji = !HABIT_EMOJI_OPTIONS.includes(curEmoji);
+  var emojiGrid = '<div style="margin-bottom:8px;"><div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">图标</div><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;" id="ciEditEmojiGrid">';
+  HABIT_EMOJI_OPTIONS.forEach(function(e) {
+    emojiGrid += '<span class="emoji-opt" style="font-size:20px;cursor:pointer;padding:3px 5px;border-radius:6px;'+(e===curEmoji&&!isCustomEmoji?'background:var(--surface-tab);border:2px solid var(--steel);':'border:2px solid transparent;')+'" data-emoji="'+e+'" onclick="var g=document.getElementById(\'ciEditEmojiGrid\');g.querySelectorAll(\'.emoji-opt\').forEach(function(s){s.style.background=\'\';s.style.border=\'2px solid transparent\'});this.style.background=\'var(--surface-tab)\';this.style.border=\'2px solid var(--steel)\';document.getElementById(\'ciEditEmoji\').value=this.dataset.emoji;var ci2=document.getElementById(\'ciEditEmojiCustom\');if(ci2)ci2.value=\'\'">'+e+'</span>';
+  });
+  emojiGrid += '<input type="text" id="ciEditEmojiCustom" value="'+(isCustomEmoji?curEmoji:'')+'" placeholder="自选" maxlength="2" style="width:42px;padding:4px 2px;border:2px solid var(--paper-deep);border-radius:6px;font-size:14px;text-align:center;" oninput="var v=this.value;document.getElementById(\'ciEditEmoji\').value=v||\''+(isCustomEmoji?curEmoji:'📌')+'\';if(v){var g=document.getElementById(\'ciEditEmojiGrid\');g.querySelectorAll(\'.emoji-opt\').forEach(function(s){s.style.background=\'\';s.style.border=\'2px solid transparent\'})}">';
+  emojiGrid += '</div><input type="hidden" id="ciEditEmoji" value="'+curEmoji+'"></div>';
+  var memberOpts = members.map(function(m){return '<option value="'+m.id+'"'+(m.id===(ci.ownerMemberId||(getChildMembers()[0]||{}).id||(members[0]||{}).id)?' selected':'')+'>'+m.name+'</option>';}).join('');
   showModalForm('✎ 编辑自定义事件',
     '<input id="ciEditTitle" value="'+(ci.title||'')+'" placeholder="事件名称" style="width:100%;padding:10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;margin-bottom:8px;">'
     + '<input id="ciEditDetail" value="'+(ci.detail||'')+'" placeholder="内容说明（可选）" style="width:100%;padding:10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;margin-bottom:8px;">'
+    + emojiGrid
+    + '<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;"><span style="font-size:12px;color:var(--ink-soft);white-space:nowrap;">归属</span><select id="ciEditMember" style="flex:1;padding:10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;">'+memberOpts+'</select></div>'
     + '<div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;"><span style="font-size:13px;white-space:nowrap;">EXP</span><input id="ciEditExp" type="number" value="'+(ci.expValue??5)+'" min="0" style="width:70px;padding:10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;"><span style="font-size:13px;white-space:nowrap;">💰</span><input id="ciEditCoin" type="number" value="'+(ci.coinValue??5)+'" min="0" style="width:70px;padding:10px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;"></div>',
     function() {
       var t = document.getElementById('ciEditTitle').value.trim();
       if (!t) { showToast('请输入事件名称'); return false; }
       ci.title = t;
       ci.detail = document.getElementById('ciEditDetail').value.trim();
+      ci.emoji = document.getElementById('ciEditEmoji').value || '📌';
+      ci.ownerMemberId = document.getElementById('ciEditMember').value;
       ci.expValue = parseInt(document.getElementById('ciEditExp').value) || 0;
       ci.coinValue = parseInt(document.getElementById('ciEditCoin').value) || 0;
       saveData(); showToast('✅ 已更新');
@@ -358,10 +371,12 @@ const HABIT_EMOJI_OPTIONS = ['🥣','🍚','🍜','💧','🧼','😴','🌙','�
 
 function _renderHabitFormFields(h, prefix) {
   var curEmoji = h ? (h.emoji||'📌') : '📌';
-  var emojiGrid = '<div style="margin-bottom:8px;"><div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">图标</div><div style="display:flex;flex-wrap:wrap;gap:4px;" id="'+prefix+'EmojiGrid">';
+  var isCustomEmoji = !HABIT_EMOJI_OPTIONS.includes(curEmoji);
+  var emojiGrid = '<div style="margin-bottom:8px;"><div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">图标</div><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;" id="'+prefix+'EmojiGrid">';
   HABIT_EMOJI_OPTIONS.forEach(function(e) {
-    emojiGrid += '<span style="font-size:20px;cursor:pointer;padding:3px 5px;border-radius:6px;'+(e===curEmoji?'background:var(--surface-tab);border:2px solid var(--steel);':'border:2px solid transparent;')+'" data-emoji="'+e+'" onclick="var g=document.getElementById(\''+prefix+'EmojiGrid\');g.querySelectorAll(\'span\').forEach(function(s){s.style.background=\'\';s.style.border=\'2px solid transparent\'});this.style.background=\'var(--surface-tab)\';this.style.border=\'2px solid var(--steel)\';document.getElementById(\''+prefix+'Emoji\').value=this.dataset.emoji">'+e+'</span>';
+    emojiGrid += '<span class="emoji-opt" style="font-size:20px;cursor:pointer;padding:3px 5px;border-radius:6px;'+(e===curEmoji&&!isCustomEmoji?'background:var(--surface-tab);border:2px solid var(--steel);':'border:2px solid transparent;')+'" data-emoji="'+e+'" onclick="var g=document.getElementById(\''+prefix+'EmojiGrid\');g.querySelectorAll(\'.emoji-opt\').forEach(function(s){s.style.background=\'\';s.style.border=\'2px solid transparent\'});this.style.background=\'var(--surface-tab)\';this.style.border=\'2px solid var(--steel)\';document.getElementById(\''+prefix+'Emoji\').value=this.dataset.emoji;var ci=document.getElementById(\''+prefix+'EmojiCustom\');if(ci)ci.value=\'\'">'+e+'</span>';
   });
+  emojiGrid += '<input type="text" id="'+prefix+'EmojiCustom" value="'+(isCustomEmoji?curEmoji:'')+'" placeholder="自选" maxlength="2" style="width:42px;padding:4px 2px;border:2px solid var(--paper-deep);border-radius:6px;font-size:14px;text-align:center;" oninput="var v=this.value;document.getElementById(\''+prefix+'Emoji\').value=v||\''+(isCustomEmoji?curEmoji:'📌')+'\';if(v){var g=document.getElementById(\''+prefix+'EmojiGrid\');g.querySelectorAll(\'.emoji-opt\').forEach(function(s){s.style.background=\'\';s.style.border=\'2px solid transparent\'})}">';
   emojiGrid += '</div><input type="hidden" id="'+prefix+'Emoji" value="'+curEmoji+'"></div>';
 
   var memberOpts = members.map(function(m){return '<option value="'+m.id+'"'+(h&&m.id===h.ownerMemberId?' selected':'')+'>'+m.name+'</option>';}).join('');
