@@ -64,13 +64,12 @@
   <div class="status-band" id="statusBand">
     <div class="hero-main">
       <div class="hero-avatar">
-        <div class="mascot-ring" id="mascotRing" style="--xp-pct:0;cursor:pointer;" onclick="changeAvatar()" title="点击更换头像 · 长按恢复默认">
+        <div class="mascot-ring" id="mascotRing" style="--xp-pct:0;">
           <div class="mascot-ring-inner">
-            <img id="mascotAvatar" src="" style="display:none;">
-            <svg id="mascotSvg" width="36" height="36" viewBox="0 0 36 36" style="pointer-events:none;"></svg>
+            <img id="mascotAvatar" src="docs/design/头像.png" style="display:block;">
+            <svg id="mascotSvg" width="36" height="36" viewBox="0 0 36 36" style="pointer-events:none;display:none;"></svg>
           </div>
         </div>
-        <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="handleAvatarUpload(this)">
       </div>
       <div class="hero-info">
         <div class="hi-level">Lv.<span id="statusLevel">1</span> · <span id="statusTitle">新手冒险者</span> <span class="hi-name" id="mascotName">宝贝</span> <span class="hi-greeting" id="dailyGreeting">🌙 夜深了</span></div>
@@ -500,6 +499,9 @@
     <div class="log-device-hint">本设备: <b id="logDeviceId">-</b> | 保留最近 200 条</div>
   </div>
 </div>
-<script src="app.js"></script>
+<script src="core.js"></script>
+<script src="engine.js"></script>
+<script src="ui.js"></script>
+<script src="init.js"></script>
 </body>
 </html>

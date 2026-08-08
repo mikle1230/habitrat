@@ -269,9 +269,10 @@ function getChildDisplayName() {
   return DEFAULT_CHILD_NAME
 }
 function getCoinBalance(memberId) {
-  const earn = transactions.filter(t => t.memberId === memberId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin')).reduce((s, t) => s + t.amount, 0);
+  const earned = transactions.filter(t => t.memberId === memberId && (t.type === 'earn_coin' || t.type === 'bonus_coin')).reduce((s, t) => s + t.amount, 0);
+  const refunded = transactions.filter(t => t.memberId === memberId && t.type === 'refund_coin').reduce((s, t) => s + t.amount, 0);
   const spent = transactions.filter(t => t.memberId === memberId && (t.type === 'spend_coin' || t.type === 'deduct_coin')).reduce((s, t) => s + t.amount, 0);
-  return earn - spent;
+  return earned + refunded - spent;
 }
 function getTotalExp(memberId) {
   return transactions.filter(t => t.memberId === memberId && (t.type === 'earn_exp' || t.type === 'bonus_exp')).reduce((s, t) => s + t.amount, 0);
@@ -1256,10 +1257,11 @@ function updatePeriodSummary(period) {
   const childId = getChildMembers()[0]?.id || selectedMemberId || members[0]?.id;
   if (!childId) return;
   const today = new Date(); const todayStr = fmtDateFull(today);
-  let earned = 0, spent = 0, totalDone = 0, totalAll = 0;
+  let earned = 0, refunded = 0, spent = 0, totalDone = 0, totalAll = 0;
   let label = '', rangeStart, rangeEnd;
   if (period === 'today') {
-    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin') && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
+    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
+    refunded = transactions.filter(t => t.memberId === childId && t.type === 'refund_coin' && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
     spent = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin') && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
     label = '今日'; rangeStart = todayStr; rangeEnd = todayStr;
     getActiveHabits().forEach(h => { if (isDayApplicable(h, today)) { totalAll++; if (getDayStatus(h, today) === '✓') totalDone++; } });
@@ -1267,7 +1269,8 @@ function updatePeriodSummary(period) {
   } else if (period === 'week') {
     const mon = getMonday(today); const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     rangeStart = fmtDateFull(mon); rangeEnd = fmtDateFull(sun);
-    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin') && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
+    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
+    refunded = transactions.filter(t => t.memberId === childId && t.type === 'refund_coin' && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
     spent = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin') && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
     label = '本周';
     for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); if (fmtDateFull(d) > todayStr) break; getActiveHabits().forEach(h => { if (!isDayApplicable(h, d)) return; totalAll++; if (getDayStatus(h, d) === '✓') totalDone++; }); }
@@ -1275,7 +1278,8 @@ function updatePeriodSummary(period) {
     document.getElementById('completionLabel').textContent = '本周';
   } else if (period === 'month') {
     const ym = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin') && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
+    earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
+    refunded = transactions.filter(t => t.memberId === childId && t.type === 'refund_coin' && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
     spent = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin') && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
     label = '本月';
     const cursor = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -3255,7 +3259,6 @@ function updateStatusBar() {
     }
   }
   // 金币相关
-  const earnedCoin = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin')).reduce((s, t) => s + t.amount, 0);
   let pendingCoin = 0;
   getActiveHabits().forEach(h => {
     const meta = getHabitMeta(h.id);
@@ -3292,7 +3295,7 @@ function updateStatusBar() {
 function showCoinSources() {
   const childId = getChildMembers()[0]?.id || selectedMemberId || members[0]?.id;
   if (!childId) return;
-  const txns = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin')).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const txns = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin')).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   let html = '';
   if (txns.length === 0) {
     html = '<div style="text-align:center;color:var(--ink-soft);padding:20px;">暂无金币记录</div>';
