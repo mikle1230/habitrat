@@ -2048,7 +2048,8 @@ function showCoinSources() {
   } else {
     const total = txns.reduce((s, t) => s + t.amount, 0);
     txns.forEach(t => {
-      const timeStr = t.time || (t.createdAt ? t.createdAt.slice(0, 16) : '');
+      var timeStr = t.time || t.createdAt || '';
+      if (timeStr.endsWith(' 00:00:00')) timeStr = timeStr.slice(0, 10);
       html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">' + (t.reason || t.type) + '</div><div class="css-date">' + timeStr + '</div></div><span class="css-amt">💰 +' + t.amount + '</span></div>';
     });
     html += '<div class="css-total"><span>合计</span><span style="color:var(--amber-deep);">💰 ' + total + '</span></div>';
@@ -2074,7 +2075,8 @@ function showSpentHistory() {
   } else {
     var totalSpent = 0, totalRefunded = 0
     records.forEach(function(t) {
-      var timeStr = t.time || (t.createdAt ? t.createdAt.slice(0, 16) : '')
+      var timeStr = t.time || t.createdAt || ''
+      if (timeStr.endsWith(' 00:00:00')) timeStr = timeStr.slice(0, 10)
       var isRefund = t.type === 'refund_coin'
       var isDeduct = t.type === 'deduct_coin'
       if (isRefund) {
