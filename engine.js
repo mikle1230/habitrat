@@ -69,8 +69,8 @@ function migrateData(oldData) {
     if (!hab) return;
     const mid = childMemberId;
     entries.forEach(e => {
-      result.transactions.push({ id: genId(), memberId: mid, type: 'earn_exp', amount: e.pts, reason: hab.name + ' 连续达标', createdAt: e.date });
-      result.transactions.push({ id: genId(), memberId: mid, type: 'earn_coin', amount: e.pts, reason: hab.name + ' 连续达标', createdAt: e.date });
+      result.transactions.push({ id: genId(), memberId: mid, type: 'earn_exp', amount: e.pts, reason: hab.name + ' 连续达标', createdAt: e.date, time: e.date + ' 00:00:00' });
+      result.transactions.push({ id: genId(), memberId: mid, type: 'earn_coin', amount: e.pts, reason: hab.name + ' 连续达标', createdAt: e.date, time: e.date + ' 00:00:00' });
       effCount++;
     });
   });
@@ -685,12 +685,26 @@ function migrateTxHabitIds() {
   });
 }
 
+// 为缺少 time 字段的历史交易补填时间（idempotent）
+function migrateTxTime() {
+  transactions.forEach(function(t) {
+    if (t.time) return;
+    var ca = t.createdAt || '';
+    if (ca.length === 10 && ca.indexOf('-') > -1) {
+      t.time = ca + ' 00:00:00';
+    } else if (ca.length >= 16) {
+      t.time = ca.length === 19 ? ca : ca.slice(0, 16) + ':00';
+    }
+  });
+}
+
 function recomputeStreaks() {
   streakState = {}; effectiveLog = {};
   const todayStr = fmtDateFull(new Date());
 
-  // 迁移：为历史交易补填 habitId（idempotent）
+  // 迁移：为历史交易补填 habitId 和 time（idempotent）
   migrateTxHabitIds();
+  migrateTxTime();
 
   // 建立 habitId → habit 索引（含所有习惯，不限于活跃）
   var allHabitsById = {};
@@ -849,6 +863,7 @@ function recomputeStreaks() {
         var expKey = ds + '|' + h.id;
         if (!earnedExpSet[expKey]) {
           transactions.push({ id: genId(), habitId: h.id, memberId: meta.ownerMemberId, type: 'earn_exp', amount: singleExp, reason: '[单次] ' + h.title, createdAt: ds,
+            time: fmtDateTime(new Date()),
             snapshot: { expValue: effExpValue, coinValue: effCoinValue, streakNeed: effStreakNeed } });
         }
         var mem = getMemberById(meta.ownerMemberId);
@@ -866,6 +881,7 @@ function recomputeStreaks() {
           var coinKey = ds + '|' + h.id;
           if (!earnedCoinSet[coinKey]) {
             transactions.push({ id: genId(), habitId: h.id, memberId: meta.ownerMemberId, type: 'earn_coin', amount: earnCoin, reason: h.title + ' 连续达标', createdAt: ds,
+              time: fmtDateTime(new Date()),
               snapshot: { expValue: effExpValue, coinValue: effCoinValue, streakNeed: effStreakNeed } });
           }
           streakState[h.id].count = 0;

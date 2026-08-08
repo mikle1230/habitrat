@@ -2041,7 +2041,7 @@ function updateStatusBar() {
 function showCoinSources() {
   const childId = getChildMembers()[0]?.id || selectedMemberId || members[0]?.id;
   if (!childId) return;
-  const txns = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin')).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const txns = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin')).sort((a, b) => (b.time || b.createdAt || '').localeCompare(a.time || a.createdAt || ''));
   let html = '';
   if (txns.length === 0) {
     html = '<div style="text-align:center;color:var(--ink-soft);padding:20px;">暂无金币记录</div>';
@@ -2067,7 +2067,7 @@ function showSpentHistory() {
   if (!childId) return
   var records = transactions.filter(function(t) {
     return t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin' || t.type === 'refund_coin')
-  }).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || '') })
+  }).sort(function(a, b) { return (b.time || b.createdAt || '').localeCompare(a.time || a.createdAt || '') })
   var html = ''
   if (records.length === 0) {
     html = '<div style="text-align:center;color:var(--ink-soft);padding:20px;">暂无兑换记录</div>'
@@ -2612,8 +2612,9 @@ function showDayDetail(date) {
         if (ci.status === '○' || ci.status === '') {
           ci.status = '✓';
           const effMemberId = ci.ownerMemberId || childId;
-          transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_exp', amount: ci.expValue ?? 5, reason: '[自定义] '+ci.title, createdAt: ci.date });
-          transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_coin', amount: ci.coinValue ?? 5, reason: '[自定义] '+ci.title, createdAt: ci.date });
+          const nowTime = fmtDateTime(new Date());
+          transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_exp', amount: ci.expValue ?? 5, reason: '[自定义] '+ci.title, createdAt: ci.date, time: nowTime });
+          transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_coin', amount: ci.coinValue ?? 5, reason: '[自定义] '+ci.title, createdAt: ci.date, time: nowTime });
           const mem = getMemberById(effMemberId); if (mem) mem.totalExp += (ci.expValue ?? 5);
           recomputeStreaks(); saveData(); showDayDetail(d); updateStatusBar(); checkLevelUps();
         } else if (ci.status === '✓') {
@@ -2709,8 +2710,9 @@ function renderHomeView() {
         ci.status = '✓';
         const exp = ci.expValue ?? 5; const coin = ci.coinValue ?? 5;
         const effMemberId = ci.ownerMemberId || childId;
-        transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_exp', amount: exp, reason: '[自定义] ' + ci.title, createdAt: ci.date });
-        transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_coin', amount: coin, reason: '[自定义] ' + ci.title, createdAt: ci.date });
+        const nowTime = fmtDateTime(new Date());
+        transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_exp', amount: exp, reason: '[自定义] ' + ci.title, createdAt: ci.date, time: nowTime });
+        transactions.push({ id: genId(), memberId: effMemberId, type: 'earn_coin', amount: coin, reason: '[自定义] ' + ci.title, createdAt: ci.date, time: nowTime });
         const mem = getMemberById(effMemberId); if (mem) mem.totalExp += exp;
         recomputeStreaks();
         saveData(); renderHomeView(); updateStatusBar(); showToast('✅ 完成！');
