@@ -167,16 +167,32 @@
           <div class="milestone-books" id="decoBooks">📚</div>
           <div class="milestone-plant" id="decoPlant">🪴</div>
         </div>
-        <div class="micro-event micro-book" id="microBook">📖</div>
         <div class="micro-event micro-glint" id="microGlint">✦</div>
         <div class="micro-event micro-magic" id="microMagic"></div>
-        <div class="micro-event micro-smile" id="microSmile">小瑞对你笑了 :)</div>
         <div class="micro-event micro-firefly" id="microFirefly">🪲</div>
         <div class="scene-rat" id="sceneRat">
           <img id="sceneRatImg" src="docs/design/场景页用小老鼠.png" alt="小瑞" style="width:80px;height:80px;object-fit:contain;">
         </div>
         <button class="scene-back-btn" id="sceneBackBtn" onclick="switchScene('main')" style="display:none;">← 返回房间</button>
-        <div class="scene-hint" id="sceneHint">💡 点击探索房间</div>
+      </div>
+      <!-- 规则说明卡片 -->
+      <div class="rules-card" id="rulesCard" onclick="openRulesModal()">
+        <div class="rules-card-icon">📜</div>
+        <div class="rules-card-text">
+          <div class="rules-card-title">游戏规则</div>
+          <div class="rules-card-sub">想知道怎么升级、怎么赚金币？点这里</div>
+        </div>
+        <div class="rules-card-arrow">›</div>
+      </div>
+      <!-- 规则说明弹窗 -->
+      <div class="modal-overlay" id="rulesOverlay" onclick="if(event.target===this) closeRulesModal()">
+        <div class="modal-card rules-modal-card">
+          <div class="rules-modal-head">
+            <span class="rules-modal-title">📜 游戏规则</span>
+            <button class="rules-modal-close" onclick="closeRulesModal()">✕</button>
+          </div>
+          <div class="rules-modal-body" id="rulesModalBody"></div>
+        </div>
       </div>
       <!-- 装扮弹窗 -->
       <div class="modal-overlay" id="dressupOverlay" onclick="if(event.target===this) closeDressupPanel()">
@@ -200,6 +216,8 @@
           <div class="dressup-grid" id="dressupGrid"></div>
         </div>
       </div>
+      <!-- 装扮汇总卡片 -->
+      <div class="growth-recent" id="growthRecent" style="background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:16px;margin-top:10px;"></div>
     </div>
   </div>
 
@@ -209,6 +227,7 @@
       <div class="shop-stall">
         <div class="shop-grid" id="shopGrid"></div>
         <div class="shop-custom-form" id="shopCustomForm"></div>
+        <div class="shop-records" id="shopRecords"></div>
       </div>
     </div>
   </div>
@@ -228,24 +247,42 @@
 
   <!-- ===== 设置视图 ===== -->
   <div class="settings-view" id="settingsView">
-    <div class="ss-section"><div class="sss-title">👧 孩子名称</div>
-      <div class="ss-field"><input id="ssChildName" placeholder="输入孩子名称"><button id="ssSaveChildName">保存</button></div>
+    <div class="settings-lock" id="settingsLock">
+      <div class="sl-icon">🔒</div>
+      <div class="sl-title">设置已被锁定</div>
+      <div class="sl-sub">这里是爸爸妈妈管理的区域，输入 PIN 码才能查看</div>
+      <button class="sl-btn" onclick="unlockSettings()">🔐 输入 PIN 解锁</button>
+      <div class="sl-forgot" onclick="openForgotPin()">忘记 PIN 了？</div>
     </div>
-    <div class="ss-section"><div class="sss-title">👥 家庭成员</div><div id="ssMembers"></div><button class="add-btn" id="ssAddMember">＋ 添加成员</button></div>
-    <div class="ss-section"><div class="sss-title">🏖 寒暑假日期配置</div><div id="vacationList"></div><button class="add-btn" id="addVacation">＋ 添加假期区间</button></div>
-    <div class="ss-section"><div class="sss-title">📋 习惯管理</div><div id="ssHabits"></div><button class="add-btn" id="ssAddHabit">＋ 添加习惯</button></div>
-    <div class="ss-section"><div class="sss-title">🔄 跨设备同步</div>
+    <div id="settingsContent">
+    <!-- 1. 同步与安全 -->
+    <div class="ss-group-title">🔐 同步与安全</div>
+    <div class="ss-section"><div class="sss-title">家长 PIN</div><div id="ssPinInfo"></div></div>
+    <div class="ss-section"><div class="sss-title">跨设备同步</div>
       <div style="margin-bottom:10px;">家庭码 <span class="ss-code" id="ssFamilyCode">------</span> <button id="ssCopyCode" class="add-btn" style="padding:6px 12px;border-style:solid;">📋 复制</button></div>
       <div id="ssInviteSection" style="margin-bottom:10px;"></div>
       <div class="ss-field"><input id="ssJoinCode" placeholder="输入6位家庭码" maxlength="6" style="text-transform:uppercase;"><button id="ssJoinBtn">加入</button></div>
     </div>
-    <div class="ss-section"><div class="sss-title">🔐 家长 PIN</div><div id="ssPinInfo"></div></div>
-    <button id="btnSettingsSave" class="primary" style="width:100%;margin-bottom:12px;">💾 保存设置</button>
-    <div class="ss-section"><div class="sss-title">💾 数据备份</div>
+    <!-- 2. 基础信息 -->
+    <div class="ss-group-title">👧 基础信息</div>
+    <div class="ss-section"><div class="sss-title">孩子名称</div>
+      <div class="ss-field"><input id="ssChildName" placeholder="输入孩子名称"><button id="ssSaveChildName">保存</button></div>
+    </div>
+    <div class="ss-section"><div class="sss-title">家庭成员</div><div id="ssMembers"></div><button class="add-btn" id="ssAddMember">＋ 添加成员</button></div>
+    <!-- 3. 习惯管理（高频） -->
+    <div class="ss-group-title">📋 习惯</div>
+    <div class="ss-section"><div class="sss-title">习惯管理</div><div id="ssHabits"></div><button class="add-btn" id="ssAddHabit">＋ 添加习惯</button></div>
+    <!-- 4. 假期设置 -->
+    <div class="ss-group-title">🏖 假期</div>
+    <div class="ss-section"><div class="sss-title">寒暑假日期</div><div id="vacationList"></div><button class="add-btn" id="addVacation">＋ 添加假期区间</button></div>
+    <!-- 5. 数据管理（危险区） -->
+    <div class="ss-group-title">💾 数据管理</div>
+    <div class="ss-section"><div class="sss-title">备份与恢复</div>
       <div class="ss-row"><button id="ssExportBackup" class="primary">📤 导出完整备份</button><button id="ssImportBackup" class="danger">📥 从备份恢复</button></div>
       <input type="file" class="ss-file" id="ssImportFile" accept=".json">
     </div>
-    <button id="btnResetData"style="width:100%;padding:12px;background:none;color:var(--coral);border:2px solid var(--coral);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">⚠️ 重置所有数据</button>
+    <button id="btnResetData" style="width:100%;padding:12px;background:none;color:var(--coral);border:2px solid var(--coral);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">⚠️ 重置所有数据</button>
+    </div>
   </div>
 </div>
 
@@ -370,6 +407,39 @@
     </div>
     <div class="modal-actions">
       <button class="modal-btn modal-cancel" id="pinCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 密保问题设置弹窗 -->
+<div class="modal-overlay" id="secQOverlay" onclick="if(event.target===this) closeSecQModal()">
+  <div class="modal-card" style="max-width:320px;">
+    <div class="modal-msg" style="font-size:16px;font-weight:700;margin-bottom:14px;">❓ 设置密保问题</div>
+    <div class="rule-tip" style="margin-bottom:12px;">忘记 PIN 时，答对密保问题就能重新设置。答案最好选只有你知道的。</div>
+    <div class="ss-field" style="margin-bottom:10px;">
+      <input id="secQuestion" placeholder="输入问题，如：我的小名是？" style="width:100%;">
+    </div>
+    <div class="ss-field" style="margin-bottom:16px;">
+      <input id="secAnswer" placeholder="输入答案" style="width:100%;">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-cancel" id="secQSkip">跳过</button>
+      <button class="modal-btn modal-ok" id="secQSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 忘记 PIN 验证弹窗 -->
+<div class="modal-overlay" id="forgotPinOverlay" onclick="if(event.target===this) closeForgotPin()">
+  <div class="modal-card" style="max-width:320px;">
+    <div class="modal-msg" style="font-size:16px;font-weight:700;margin-bottom:14px;">🔓 重置 PIN</div>
+    <div id="forgotPinQuestion" class="rule-tip" style="margin-bottom:12px;"></div>
+    <div class="ss-field" style="margin-bottom:16px;">
+      <input id="forgotPinAnswer" placeholder="输入答案" style="width:100%;">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-cancel" id="forgotPinCancel">取消</button>
+      <button class="modal-btn modal-ok" id="forgotPinConfirm">验证</button>
     </div>
   </div>
 </div>

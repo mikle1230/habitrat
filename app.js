@@ -22,6 +22,7 @@ const mascotStages = {
 const OUTFIT_CATEGORIES = ['clothing', 'companion', 'background'];
 const OUTFIT_CATEGORY_LABELS = { clothing: '服饰', companion: '伙伴', background: '背景' };
 let outfitState = {}; // { memberId: { clothing: 'scarf_green', companion: null, background: null } }
+let sceneZones = []; // 场景热区：{ name, points:[{x,y}] } 百分比坐标多边形，可增删，自动持久化
 
 const OUTFIT_DEFINITIONS = {
   clothing: [
@@ -93,6 +94,66 @@ function equipOutfit(memberId, category, itemId) {
   renderMascotSvg(memberId, 'dressupMascotSvg');
 }
 
+// ================================================================
+// 游戏规则说明（想改规则内容，直接改这里的文字即可）
+// 每个 section 是一个板块：emoji+标题+多条规则+可选的温馨提示
+// ================================================================
+const GAME_RULES = [
+  {
+    emoji: '📅',
+    title: '每天做什么',
+    lines: [
+      '每天打开「任务」页，把今天该做的事情完成，点一下就打上卡。',
+      '每个习惯有三种状态：<b>✅ 完成</b>、<b>✗ 没完成</b>、<b>○ 还没做</b>。',
+      '完成了就获得经验（EXP）和金币（💰），没完成不计分。'
+    ]
+  },
+  {
+    emoji: '⭐',
+    title: 'EXP 和升级',
+    lines: [
+      '经验攒够了就会<b>升级</b>，等级越高，称号越厉害。',
+      '每升一级，就能解锁新的装扮、伙伴和场景，把 Ratty 的家打扮得越来越漂亮。'
+    ]
+  },
+  {
+    emoji: '💰',
+    title: '金币和奖励',
+    lines: [
+      '金币可以用来在「商店」里兑换奖励。',
+      '奖励是爸爸妈妈和你一起商量好的，兑换前记得先问问哦。'
+    ],
+    tip: '金币花掉了还能再赚，每天坚持打卡就有金币啦！'
+  },
+  {
+    emoji: '🔥',
+    title: '连续打卡',
+    lines: [
+      '每天<b>全部完成</b>所有习惯，就算「全勤」一天。',
+      '连续全勤的天数越多，解锁的奖励越丰厚。',
+      '如果有一天没完成，连续天数就会从头开始算。'
+    ],
+    tip: '不用怕断掉，重新开始也是一种坚持！'
+  },
+  {
+    emoji: '🔒',
+    title: '每天结束后自动锁定',
+    lines: [
+      '每天到 <b>23:59</b>，当天内容会自动锁定，不能再改。',
+      '这样能保证记录是真实的，避免不小心误操作。',
+      '如果当天真的需要修改，可以让爸爸妈妈用 PIN 码解锁。'
+    ]
+  },
+  {
+    emoji: '🏖️',
+    title: '节假日和寒暑假',
+    lines: [
+      '在假期里，有些习惯的时间要求会放松一点。',
+      '寒暑假的时间段会在「设置」里由爸爸妈妈配置，当天顶部会有提示。'
+    ]
+  }
+];
+
 // 1. Legacy Data
 const HABITS_LEGACY = [
   { id:'mom_bf', personKey:'xiaomei', emoji:'🥣', name:'妈妈吃早饭', pts:10, streakNeed:3, rule:'8:30前', ruleVacation:'9:00前', applicable:'all' },
@@ -140,6 +201,8 @@ const state = {
   lastSyncTime: null,
   lockedDates: {},
   parentPin: '',
+  securityQuestion: '',
+  securityAnswer: '',
   unlockedForEdit: {},
   // 导航
   currentView: 'week',
@@ -151,19 +214,20 @@ const state = {
 // 导出为顶层变量别名（对象/数组共享引用，原语值在 saveData 前同步回 state）
 let family, members, habitTemplates, rewardItems, _levelConfig, selectedMemberId, _lastKnownLevels, roomState;
 let checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog;
-let syncStatus, _dataVersion, familyCode, lastSyncTime, lockedDates, parentPin, unlockedForEdit;
+let syncStatus, _dataVersion, familyCode, lastSyncTime, lockedDates, parentPin, securityQuestion, securityAnswer, unlockedForEdit;
 let currentView, currentHomeTab, currentMonth, currentWeek, currentDay;
 /** 将所有 state 属性复制到顶层变量（对象保持引用传递） */
 function _syncFromState() {
   ({ family, members, habitTemplates, rewardItems, _levelConfig, selectedMemberId, _lastKnownLevels, roomState,
      checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog,
-     syncStatus, _dataVersion, familyCode, lastSyncTime, lockedDates, parentPin, unlockedForEdit,
+     syncStatus, _dataVersion, familyCode, lastSyncTime, lockedDates, parentPin, securityQuestion, securityAnswer, unlockedForEdit,
      currentView, currentHomeTab, currentMonth, currentWeek, currentDay } = state);
 }
 /** 将原语值从顶层变量同步回 state（对象/数组已共享引用，无需回写） */
 function _syncToState() {
   state._dataVersion = _dataVersion; state.familyCode = familyCode; state.syncStatus = syncStatus;
-  state.parentPin = parentPin; state.selectedMemberId = selectedMemberId;
+  state.parentPin = parentPin; state.securityQuestion = securityQuestion; state.securityAnswer = securityAnswer;
+  state.selectedMemberId = selectedMemberId;
   state.currentView = currentView; state.currentHomeTab = currentHomeTab;
   state.currentMonth = currentMonth; state.currentWeek = currentWeek; state.currentDay = currentDay;
   state.lastSyncTime = lastSyncTime;
@@ -192,7 +256,7 @@ function getGuardianMembers() { return members.filter(m => m.role === 'guardian'
 function getMemberName(id) { const m = getMemberById(id); return m ? m.name : '未知'; }
 function getMemberEmoji(id) { const m = getMemberById(id); if (!m) return '👤'; if (m.role === 'guardian') return '👩'; return '👧'; }
 function getCoinBalance(memberId) {
-  const earn = transactions.filter(t => t.memberId === memberId && (t.type === 'earn_coin' || t.type === 'bonus_coin')).reduce((s, t) => s + t.amount, 0);
+  const earn = transactions.filter(t => t.memberId === memberId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin')).reduce((s, t) => s + t.amount, 0);
   const spent = transactions.filter(t => t.memberId === memberId && (t.type === 'spend_coin' || t.type === 'deduct_coin')).reduce((s, t) => s + t.amount, 0);
   return earn - spent;
 }
@@ -254,6 +318,7 @@ function getRemain_old() { return getTotalEarned_old() - getTotalSpent_old(); }
 
 // ========== Date utilities ==========
 function fmtDateFull(d) { const y = d.getFullYear(), m = d.getMonth()+1, dd = d.getDate(); return y+'-'+String(m).padStart(2,'0')+'-'+String(dd).padStart(2,'0'); }
+function fmtDateTime(d) { return fmtDateFull(d) + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
 function fmtDate(d) { return (d.getMonth()+1)+'/'+d.getDate(); }
 function fmtDateCN(d) { return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'; }
 function getMonday(date) { const d = new Date(date); d.setHours(0,0,0,0); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); return d; }
@@ -398,6 +463,8 @@ function loadData() {
       familyCode = d.familyCode || '';
       lockedDates = d.lockedDates || {};
       parentPin = d.parentPin || '';
+      securityQuestion = d.securityQuestion || '';
+      securityAnswer = d.securityAnswer || '';
       family = d.family || null;
       members = d.members || [];
       habitTemplates = d.habitTemplates || [];
@@ -406,6 +473,7 @@ function loadData() {
       if (_levelConfig.titles.length < 21) { _levelConfig.titles = ['新手冒险者','新手冒险者','新手冒险者','新手冒险者','坚毅探险家','坚毅探险家','坚毅探险家','坚毅探险家','坚毅探险家','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','勇敢挑战者','荣耀守护者','传奇领航者']; }
       outfitState = d.outfitState || {};
       roomState = d.roomState || {};
+      sceneZones = d.sceneZones !== undefined ? d.sceneZones : defaultSceneZones();
       _dataVersion = d._dataVersion || 0;
 
       // 补丁：旧数据中习惯模板可能缺 emoji 或用旧 emoji
@@ -516,7 +584,7 @@ function saveData(skipSync) {
   state._dataVersion = _dataVersion;
   localStorage.setItem('habitrat:v4', JSON.stringify({
     checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog,
-    familyCode, parentPin, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, _schemaVersion: 2, _dataVersion,
+    familyCode, parentPin, securityQuestion, securityAnswer, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, sceneZones, _schemaVersion: 2, _dataVersion,
   }));
   if (!skipSync) debounceSyncToServer();
 }
@@ -964,7 +1032,7 @@ function updatePeriodSummary(period) {
   let label = '', rangeStart, rangeEnd;
   if (period === 'today') {
     earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt === todayStr).reduce((s, t) => s + t.amount, 0);
     label = '今日'; rangeStart = todayStr; rangeEnd = todayStr;
     getActiveHabits().forEach(h => { if (isDayApplicable(h, today)) { totalAll++; if (getDayStatus(h, today) === '✓') totalDone++; } });
     document.getElementById('completionRow').style.display = 'none';
@@ -972,7 +1040,7 @@ function updatePeriodSummary(period) {
     const mon = getMonday(today); const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     rangeStart = fmtDateFull(mon); rangeEnd = fmtDateFull(sun);
     earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt >= rangeStart && t.createdAt <= rangeEnd).reduce((s, t) => s + t.amount, 0);
     label = '本周';
     for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); if (fmtDateFull(d) > todayStr) break; getActiveHabits().forEach(h => { if (!isDayApplicable(h, d)) return; totalAll++; if (getDayStatus(h, d) === '✓') totalDone++; }); }
     document.getElementById('completionRow').style.display = 'flex';
@@ -980,7 +1048,7 @@ function updatePeriodSummary(period) {
   } else if (period === 'month') {
     const ym = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
     earned = transactions.filter(t => t.memberId === childId && (t.type === 'earn_coin' || t.type === 'bonus_coin') && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
-    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
+    spent = transactions.filter(t => t.memberId === childId && t.type === 'spend_coin' && !t.refunded && t.createdAt && t.createdAt.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
     label = '本月';
     const cursor = new Date(today.getFullYear(), today.getMonth(), 1);
     while (cursor.getMonth() === today.getMonth()) { const ds = fmtDateFull(cursor); if (ds > todayStr) break; getActiveHabits().forEach(h => { if (!isDayApplicable(h, cursor)) return; totalAll++; if (getDayStatus(h, cursor) === '✓') totalDone++; }); cursor.setDate(cursor.getDate() + 1); }
@@ -1433,45 +1501,15 @@ function renderGrowthView() {
   const prog = getExpProgress(selectedMemberId);
   renderScene(selectedMemberId);
   switchScene('main'); // reset to main view
-  setTimeout(function() { var b = document.getElementById('btnSceneEditor'); if (b) b.style.display = 'block'; }, 300);
+  if (SCENE_EDITOR_ENABLED) setTimeout(function() { var b = document.getElementById('btnSceneEditor'); if (b) b.style.display = 'block'; }, 300);
   // 收藏品已集成到场景中（徽章墙），隐藏旧网格
   const gcGrid = document.getElementById('gcGrid');
   if (gcGrid) gcGrid.innerHTML = '';
   // 装扮快捷入口
   const childId4Scene = selectedMemberId;
-  const sceneLevel = prog.level;
   const sceneOutfits = getUnlockedOutfits(childId4Scene).filter(i => i.unlocked);
   const sceneState = outfitState[childId4Scene] || { clothing: null, companion: null, background: null };
-  // Scene info: level + title + EXP progress
-  var sceneInfoEl = document.getElementById('sceneInfo');
-  if (sceneInfoEl) {
-    const nextExp = getExpForLevel(sceneLevel + 1);
-    const remain = nextExp - prog.currentExp;
-    const need = nextExp - getExpForLevel(sceneLevel);
-    const pct = Math.round((prog.currentExp - getExpForLevel(sceneLevel)) / need * 100);
-    sceneInfoEl.innerHTML = 'Lv.' + sceneLevel + ' · ' + getTitleForLevel(sceneLevel)
-      + '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'
-      + '<div style="flex:1;height:6px;background:var(--track-bg);border-radius:3px;overflow:hidden;">'
-      + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,var(--gold),var(--glow));border-radius:3px;"></div></div>'
-      + '<span style="font-size:11px;color:var(--ink-soft);font-weight:500;">距 Lv.' + (sceneLevel + 1) + ' 还需 ' + remain + ' EXP</span>'
-      + '</div>';
-  }
 
-  // Today's mini-progress
-  const todayStr2 = fmtDateFull(new Date());
-  let todayDone2 = 0, todayTotal2 = 0;
-  getActiveHabits().forEach(function(h) {
-    if (!isDayApplicable(h, new Date())) return;
-    todayTotal2++;
-    if (getDayStatus(h, new Date()) === '✓') todayDone2++;
-  });
-  var mottoEl = document.getElementById('sceneMotto');
-  if (mottoEl && todayTotal2 > 0) {
-    const allDone = todayDone2 === todayTotal2;
-    const emoji = allDone ? '🎉' : '💪';
-    const text = allDone ? '今天全部完成，太棒啦！' : '今天完成 ' + todayDone2 + '/' + todayTotal2 + '，加油！';
-    mottoEl.innerHTML = '<span style="cursor:pointer;" onclick="switchView(\'home\')">' + emoji + ' ' + text + ' →</span>';
-  }
 
   // Dress-up collection summary
   var dressupSection = document.getElementById('growthRecent');
@@ -1502,7 +1540,7 @@ function renderGrowthView() {
 var currentScene = 'main';
 // ========== 场景热区编辑器（?editor=1 启用） ==========
 var sceneEditorActive = false;
-var editorStartX, editorStartY, editorRect;
+const SCENE_EDITOR_ENABLED = false; // 暂时隐藏「编辑热区」按钮（功能保留），需要时改为 true 恢复
 
 // Show editor button (called after scene renders)
 setTimeout(function() {
@@ -1521,6 +1559,7 @@ function initSceneEditor() {
     sceneEditorActive = false;
     canvas.style.display = 'none';
     output.style.display = 'none';
+    output.innerHTML = '';
     if (btn) { btn.textContent = '✎ 编辑热区'; btn.style.background = 'rgba(45,51,64,.8)'; btn.style.color = 'var(--gold)'; }
     return;
   }
@@ -1531,62 +1570,281 @@ function initSceneEditor() {
   canvas.height = bg.clientHeight;
   if (btn) { btn.textContent = '退出编辑'; btn.style.background = 'rgba(200,157,74,.9)'; btn.style.color = '#2D3340'; }
   var ctx = canvas.getContext('2d');
+  var drawing = false;
+  var editorPts = [];
+  var selectedName = null;
+  var hadFree = false; // 本次绘制是否经过已有热区之外的自由区域
+
+  function zoneNameAt(xPct, yPct) {
+    for (var i = 0; i < sceneZones.length; i++) {
+      if (pointInPoly(sceneZones[i].points, xPct, yPct)) return sceneZones[i].name;
+    }
+    return null;
+  }
+  function nextZoneName() {
+    var max = 0;
+    sceneZones.forEach(function(z) {
+      var m = /^zone-(\d+)$/.exec(z.name || '');
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return 'zone-' + (max + 1);
+  }
+  function drawAll() { drawSceneZones(canvas, ctx, selectedName); }
+  function refreshOutput() {
+    if (selectedName) {
+      output.innerHTML = '<div style="display:flex;align-items:center;gap:8px;background:rgba(255,107,107,.15);color:#FF6B6B;padding:8px 12px;border-radius:8px;font-size:13px;">'
+        + '🎯 已选中：<b>' + selectedName + '</b>'
+        + '<button onclick="deleteZone(\'' + selectedName + '\')" style="margin-left:auto;border:none;border-radius:6px;background:#FF6B6B;color:#fff;padding:4px 10px;font-size:12px;cursor:pointer;">🗑 删除</button></div>';
+    } else {
+      output.innerHTML = '<div style="background:rgba(45,51,64,.85);color:#EFEAE0;padding:8px 14px;border-radius:8px;font-size:12px;">'
+        + '📌 在热区外按住画圈 = 新增 · 点已有热区 = 选中/删除</div>';
+    }
+  }
 
   canvas.onmousedown = function(e) {
     e.stopPropagation();
     var rect = canvas.getBoundingClientRect();
-    editorStartX = (e.clientX - rect.left) / rect.width * 100;
-    editorStartY = (e.clientY - rect.top) / rect.height * 100;
-    editorRect = null;
+    var xPct = (e.clientX - rect.left) / rect.width * 100;
+    var yPct = (e.clientY - rect.top) / rect.height * 100;
+    var hitName = zoneNameAt(xPct, yPct);
+    if (hitName) {
+      // 点选已有热区（选中/删除）
+      selectedName = hitName;
+      drawing = false;
+      editorPts = [];
+      drawAll();
+      refreshOutput();
+      return;
+    }
+    // 空白处开始画圈（新增）
+    selectedName = null;
+    drawing = true;
+    hadFree = true;
+    editorPts = [{ x: xPct, y: yPct, snap: false }];
+    refreshOutput();
   };
   canvas.onmousemove = function(e) {
-    if (editorStartX === undefined) return;
+    if (!drawing) return;
     var rect = canvas.getBoundingClientRect();
     var x = (e.clientX - rect.left) / rect.width * 100;
     var y = (e.clientY - rect.top) / rect.height * 100;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(200,157,74,0.3)';
-    ctx.strokeStyle = '#C89D4A';
-    ctx.lineWidth = 2;
-    var rx = Math.min(editorStartX, x) / 100 * canvas.width;
-    var ry = Math.min(editorStartY, y) / 100 * canvas.height;
-    var rw = Math.abs(x - editorStartX) / 100 * canvas.width;
-    var rh = Math.abs(y - editorStartY) / 100 * canvas.height;
-    ctx.fillRect(rx, ry, rw, rh);
-    ctx.strokeRect(rx, ry, rw, rh);
-    editorRect = {
-      x: Math.round(Math.min(editorStartX, x)),
-      y: Math.round(Math.min(editorStartY, y)),
-      w: Math.round(Math.abs(x - editorStartX)),
-      h: Math.round(Math.abs(y - editorStartY))
-    };
+    var last = editorPts[editorPts.length - 1];
+    // 轨迹点过密时跳过，减少数据量
+    if (last && Math.abs(x - last.x) < 0.3 && Math.abs(y - last.y) < 0.3) return;
+    var sp = applyZoneSnap(x, y);
+    if (sp.x !== x || sp.y !== y) {
+      // 吸附到已有热区边界：贴近上一吸附点时跳过，避免边界点堆积
+      if (last && Math.abs(sp.x - last.x) < 0.3 && Math.abs(sp.y - last.y) < 0.3) return;
+      editorPts.push({ x: sp.x, y: sp.y, snap: true });
+    } else {
+      hadFree = true;
+      editorPts.push({ x: x, y: y, snap: false });
+    }
+    drawAll();
+    drawStroke();
   };
   canvas.onmouseup = function() {
-    if (editorRect && editorRect.w > 1 && editorRect.h > 1) {
-      var txt = 'x:'+editorRect.x+'% y:'+editorRect.y+'% w:'+editorRect.w+'% h:'+editorRect.h+'%';
-      output.innerHTML = '<div style="background:rgba(45,51,64,.85);color:#EFEAE0;padding:8px 14px;border-radius:8px;font-size:13px;font-family:monospace;cursor:pointer;" onclick="navigator.clipboard.writeText(\''+txt+'\').then(function(){showToast(\'📋 已复制\')})">'+txt+' (点击复制)</div>';
+    if (!drawing) return;
+    drawing = false;
+    if (editorPts.length >= 4) {
+      var pts = simplifyPath(editorPts, 0.8);
+      if (pts.length >= 3) {
+        if (hadFree) {
+          var name = nextZoneName();
+          sceneZones.push({ name: name, points: pts });
+          saveData();
+          showToast('✅ 已添加热区「' + name + '」');
+          selectedName = name;
+        } else {
+          showToast('⚠️ 该区域已在其他热区内，无法新增');
+        }
+      }
     }
-    editorStartX = undefined;
+    editorPts = [];
+    hadFree = false;
+    drawAll();
+    refreshOutput();
   };
+  function drawStroke() {
+    if (editorPts.length < 2) return;
+    var hasSnap = editorPts.some(function(p) { return p.snap; });
+    ctx.strokeStyle = hasSnap ? '#1FAE9F' : '#C89D4A'; // 吸附段绿色
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(editorPts[0].x / 100 * canvas.width, editorPts[0].y / 100 * canvas.height);
+    for (var i = 1; i < editorPts.length; i++) {
+      ctx.lineTo(editorPts[i].x / 100 * canvas.width, editorPts[i].y / 100 * canvas.height);
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(200,157,74,0.25)';
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawAll();
+  refreshOutput();
 }
 
-var sceneZones = [
-  { x:4, y:28, w:16, h:20 },  // window
-  { x:4, y:51, w:8, h:24 },   // wash
-  { x:13, y:63, w:9, h:18 },  // wash
-  { x:13, y:47, w:18, h:14 }, // sleep
-  { x:31, y:51, w:9, h:12 },  // chest (reserved)
-  { x:59, y:29, w:19, h:37 }, // desk
-  { x:72, y:70, w:25, h:25 }, // dining
+// 绘制全部热区（金色描边 + 半透明填充 + 名称标签；选中为红色）
+function drawSceneZones(canvas, ctx, selectedName) {
+  if (!canvas || !ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  sceneZones.forEach(function(z) {
+    var pts = z.points;
+    if (!pts || pts.length < 2) return;
+    var isSel = z.name === selectedName;
+    var color = isSel ? '#FF6B6B' : '#C89D4A';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x / 100 * canvas.width, pts[0].y / 100 * canvas.height);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x / 100 * canvas.width, pts[i].y / 100 * canvas.height);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fillStyle = isSel ? 'rgba(255,107,107,0.3)' : 'rgba(200,157,74,0.25)';
+    ctx.fill();
+    var cx = 0, cy = 0;
+    pts.forEach(function(p) { cx += p.x; cy += p.y; });
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(z.name, cx / pts.length / 100 * canvas.width, cy / pts.length / 100 * canvas.height - 4);
+  });
+}
+
+// 若点位于某个已有热区内，吸附到该热区边界上最近的点；否则返回原坐标
+function applyZoneSnap(x, y) {
+  var best = null, bestDist = Infinity;
+  for (var i = 0; i < sceneZones.length; i++) {
+    var pts = sceneZones[i].points;
+    if (!pts || pts.length < 3) continue;
+    if (!pointInPoly(pts, x, y)) continue;
+    for (var j = 0; j < pts.length; j++) {
+      var a = pts[j], b = pts[(j + 1) % pts.length];
+      var proj = closestPointOnSegment(a, b, { x: x, y: y });
+      var d = (proj.x - x) * (proj.x - x) + (proj.y - y) * (proj.y - y);
+      if (d < bestDist) { bestDist = d; best = proj; }
+    }
+  }
+  return best || { x: x, y: y };
+}
+function closestPointOnSegment(a, b, p) {
+  var dx = b.x - a.x, dy = b.y - a.y;
+  var len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { x: a.x, y: a.y };
+  var t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return { x: a.x + t * dx, y: a.y + t * dy };
+}
+
+// 删除热区（供编辑器选中条调用）
+function deleteZone(name) {
+  var idx = -1;
+  for (var i = 0; i < sceneZones.length; i++) { if (sceneZones[i].name === name) { idx = i; break; } }
+  if (idx < 0) return;
+  sceneZones.splice(idx, 1);
+  saveData();
+  showToast('🗑 已删除热区「' + name + '」');
+  var canvas = document.getElementById('sceneEditorCanvas');
+  var output = document.getElementById('sceneEditorOutput');
+  if (canvas) {
+    var ctx = canvas.getContext('2d');
+    drawSceneZones(canvas, ctx, null);
+  }
+  if (output) output.innerHTML = '<div style="background:rgba(45,51,64,.85);color:#EFEAE0;padding:8px 14px;border-radius:8px;font-size:12px;">📌 在热区外按住画圈 = 新增 · 点已有热区 = 选中/删除</div>';
+  var btn = document.getElementById('btnSceneEditor');
+  if (btn && sceneEditorActive) { btn.textContent = '退出编辑'; btn.style.background = 'rgba(200,157,74,.9)'; btn.style.color = '#2D3340'; }
+}
+
+// ===== 复制到剪贴板（Clipboard API + execCommand 降级）=====
+function copyText(txt) {
+  function fallback() {
+    var ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      if (typeof showToast === 'function') showToast('📋 已复制');
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('⚠️ 复制失败，请手动选择文本复制');
+    }
+    document.body.removeChild(ta);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function() {
+      if (typeof showToast === 'function') showToast('📋 已复制');
+    }).catch(function() { fallback(); });
+  } else {
+    fallback();
+  }
+}
+
+// ===== 路径抽稀（Douglas-Peucker）=====
+function simplifyPath(points, tol) {
+  if (points.length < 3) return points;
+  var a = points[0], b = points[points.length - 1];
+  var dmax = 0, idx = 0;
+  for (var i = 1; i < points.length - 1; i++) {
+    var d = perpDist(points[i], a, b);
+    if (d > dmax) { dmax = d; idx = i; }
+  }
+  if (dmax > tol) {
+    var l = simplifyPath(points.slice(0, idx + 1), tol);
+    var r = simplifyPath(points.slice(idx), tol);
+    return l.slice(0, l.length - 1).concat(r);
+  }
+  return [a, b];
+}
+function perpDist(p, a, b) {
+  var dx = b.x - a.x, dy = b.y - a.y;
+  if (dx === 0 && dy === 0) return Math.sqrt((p.x - a.x) * (p.x - a.x) + (p.y - a.y) * (p.y - a.y));
+  return Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / Math.sqrt(dx * dx + dy * dy);
+}
+
+// ===== 点在多边形内判定（射线法）=====
+function pointInPoly(pts, x, y) {
+  var inside = false;
+  for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    var xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+// 默认热区（首次使用时初始化；之后以用户编辑保存的为准）
+const DEFAULT_SCENE_ZONES = [
+  { name: 'zone-1', points: [{x:4,y:51},{x:12,y:51},{x:12,y:75},{x:4,y:75}] },    // 洗脸区
+  { name: 'zone-2', points: [{x:13,y:47},{x:31,y:47},{x:31,y:61},{x:13,y:61}] }, // 床
+  { name: 'zone-3', points: [{x:4,y:28},{x:20,y:28},{x:20,y:48},{x:4,y:48}] },   // 窗户
+  { name: 'zone-4', points: [{x:31,y:51},{x:40,y:51},{x:40,y:63},{x:31,y:63}] }, // 宝箱
+  { name: 'zone-5', points: [{x:35,y:28},{x:47,y:28},{x:47,y:45},{x:35,y:45}] }, // 成就室2（占位）
+  { name: 'zone-6', points: [{x:59,y:29},{x:78,y:29},{x:78,y:66},{x:59,y:66}] }, // 书桌
+  { name: 'zone-7', points: [{x:72,y:70},{x:97,y:70},{x:97,y:95},{x:72,y:95}] }, // 餐桌
 ];
+// 热区名 → 跳转目标场景（'dressup' = 打开装扮面板）。zone-8 / zone-9 待定，暂不关联。
+const SCENE_NAME_MAP = {
+  // 用户自定义热区
+  'zone-1': 'wash', 'zone-2': 'sleep', 'zone-3': 'window', 'zone-4': 'dressup',
+  'zone-5': 'trophy', 'zone-6': 'desk', 'zone-7': 'dining',
+  // 兼容旧默认热区名
+  window: 'window', 'wash-1': 'wash', 'wash-2': 'wash', sleep: 'sleep',
+  chest: 'dressup', desk: 'desk', dining: 'dining'
+};
+// 深拷贝默认热区，避免共享引用
+function defaultSceneZones() {
+  return DEFAULT_SCENE_ZONES.map(z => ({ name: z.name, points: z.points.map(p => ({ x: p.x, y: p.y })) }));
+}
 function hitZone(xPct, yPct) {
   for (var i = 0; i < sceneZones.length; i++) {
     var z = sceneZones[i];
-    if (xPct >= z.x && xPct <= z.x+z.w && yPct >= z.y && yPct <= z.y+z.h) return true;
+    if (z.points && pointInPoly(z.points, xPct, yPct)) return true;
   }
   return false;
 }
 function handleSceneHover(e) {
+  if (sceneEditorActive) return; // 编辑热区时禁用场景手势
   if (currentScene !== 'main') return;
   var room = document.getElementById('sceneRoom');
   var rect = room.getBoundingClientRect();
@@ -1596,18 +1854,20 @@ function handleSceneHover(e) {
 }
 
 function handleSceneClick(e) {
+  if (sceneEditorActive) return; // 编辑热区时禁用场景切换
   if (e.target.tagName === 'BUTTON') return;
   var room = document.getElementById('sceneRoom');
   var rect = room.getBoundingClientRect();
   var xPct = (e.clientX - rect.left) / rect.width * 100;
   var yPct = (e.clientY - rect.top) / rect.height * 100;
   if (currentScene === 'main') {
-    var sceneMap = { 0:'window', 1:'wash', 2:'wash', 3:'sleep', 4:'dressup', 5:'desk', 6:'dining' };
     for (var i = 0; i < sceneZones.length; i++) {
       var z = sceneZones[i];
-      if (xPct >= z.x && xPct <= z.x+z.w && yPct >= z.y && yPct <= z.y+z.h) {
-        if (sceneMap[i] === 'dressup') { toggleDressupPanel(); return; }
-        if (sceneMap[i]) switchScene(sceneMap[i]); return;
+      if (z.points && pointInPoly(z.points, xPct, yPct)) {
+        var target = SCENE_NAME_MAP[z.name];
+        if (target === 'dressup') { toggleDressupPanel(); return; }
+        if (target) { switchScene(target); return; }
+        showToast('「' + z.name + '」尚未关联场景'); return;
       }
     }
   } else if (currentScene === 'desk') {
@@ -1654,24 +1914,38 @@ var sceneImages = {
   window: 'docs/design/窗外.jpg',
   dining: 'docs/design/餐桌.jpg',
   sleep: 'docs/design/睡觉.jpg',
-  desk: 'docs/design/书桌.jpg'
+  desk: 'docs/design/书桌.jpg',
+  trophy: 'docs/design/成就室2.png'
 };
 function switchScene(scene) {
   var bg = document.getElementById('sceneBgImg');
+  var rat = document.getElementById('sceneRat');
+  var isMain = scene === 'main';
+  // 过渡期间先隐藏 Ratty，等背景图加载完成（模糊结束）后再显示，避免在模糊背景上提前出现
+  if (rat) rat.style.display = 'none';
   if (bg) {
     bg.classList.add('switching');
-    setTimeout(function() {
-      bg.src = sceneImages[scene] || sceneImages.main;
+    var url = sceneImages[scene] || sceneImages.main;
+    var done = false;
+    function finish() {
+      if (done) return; done = true;
+      bg.src = url;
       bg.classList.remove('switching');
-    }, 200);
+      if (rat && isMain) rat.style.display = '';
+    }
+    var img = new Image();
+    img.onload = finish;
+    img.onerror = finish;
+    // 至少保持模糊过渡 200ms 可见（图片缓存命中时 onload 会立即触发，避免瞬间切换）
+    setTimeout(finish, 200);
+    img.src = url;
+  } else if (rat && isMain) {
+    rat.style.display = '';
   }
   currentScene = scene;
   var back = document.getElementById('sceneBackBtn');
   var room = document.getElementById('sceneRoom');
   var decos = document.getElementById('sceneDecos');
-  var rat = document.getElementById('sceneRat');
-  var motto = document.getElementById('sceneMotto');
-  var isMain = scene === 'main';
   if (room) {
     room.classList.toggle('scene-main', isMain);
     room.classList.toggle('scene-desk', scene === 'desk');
@@ -1695,20 +1969,40 @@ function switchScene(scene) {
   }
   if (back) back.style.display = isMain ? 'none' : 'block';
   if (decos) decos.style.display = isMain ? '' : 'none';
-  if (rat) rat.style.display = isMain ? '' : 'none';
-  if (motto) motto.style.display = isMain ? '' : 'none';
   // 场景提示
-  var hint = document.getElementById('sceneHint');
   var zhTL = document.getElementById('zoneHintTl');
   var zhTR = document.getElementById('zoneHintTr');
   var zhBL = document.getElementById('zoneHintBl');
   var zhBR = document.getElementById('zoneHintBr');
   var zhShow = isMain ? '' : 'none';
-  if (hint) hint.style.display = zhShow;
   if (zhTL) zhTL.style.display = zhShow;
   if (zhTR) zhTR.style.display = zhShow;
   if (zhBL) zhBL.style.display = zhShow;
   if (zhBR) zhBR.style.display = zhShow;
+}
+
+function openRulesModal() {
+  var body = document.getElementById('rulesModalBody');
+  var overlay = document.getElementById('rulesOverlay');
+  if (!body || !overlay) return;
+  var html = '';
+  GAME_RULES.forEach(function(section) {
+    html += '<div class="rule-section">'
+      + '<div class="rule-title">' + section.emoji + ' ' + section.title + '</div>';
+    section.lines.forEach(function(line) {
+      html += '<div class="rule-line">' + line + '</div>';
+    });
+    if (section.tip) {
+      html += '<div class="rule-tip">💡 ' + section.tip + '</div>';
+    }
+    html += '</div>';
+  });
+  body.innerHTML = html;
+  overlay.classList.add('show');
+}
+function closeRulesModal() {
+  var overlay = document.getElementById('rulesOverlay');
+  if (overlay) overlay.classList.remove('show');
 }
 
 let _dressupOpen = false;
@@ -1729,7 +2023,6 @@ function closeDressupPanel() {
 function renderScene(memberId) {
   const prog = getExpProgress(memberId);
   const level = prog.level;
-  var si = document.getElementById('sceneInfo'); if (si) si.textContent = '总EXP: ' + prog.currentExp + ' · ' + getTitleForLevel(level);
   // Level evolution: room decorations
   toggleEvo('evoFlower', level >= 4);
   toggleEvo('evoStars', level >= 10);
@@ -1805,12 +2098,6 @@ function checkWeatherAndSeason() {
   }
   // Halloween: Oct 25-31
   // (future: spider web overlay, etc.)
-  // Rain: hook for real weather API — for now, show rain on rainy-looking dates (March-May)
-  var rain = document.getElementById('rainOverlay');
-  if (rain) {
-    var isRainySeason = (month >= 3 && month <= 5);
-    if (isRainySeason) rain.classList.add('active'); else rain.classList.remove('active');
-  }
 }
 
 // ---- Micro Event Timer ----
@@ -1824,11 +2111,9 @@ function stopMicroEventTimer() {
 }
 function scheduleNextMicroEvent() {
   var events = [
-    { id: 'microBook', min: 20, max: 35 },
     { id: 'microFirefly', min: 35, max: 55 },
     { id: 'microMagic', min: 60, max: 90 },
     { id: 'microGlint', min: 80, max: 120 },
-    { id: 'microSmile', min: 100, max: 160 },
   ];
   var ev = events[Math.floor(Math.random() * events.length)];
   var delay = (ev.min + Math.random() * (ev.max - ev.min)) * 1000;
@@ -1959,13 +2244,16 @@ function renderExchangeItems() {
     const el = document.getElementById('psiTotal'+idx); if (el) el.innerHTML = '= <b>'+(qty*item.cost)+'</b> 💰';
   }); });
   // Bind exchange button
-  document.querySelectorAll('.shop-spend-btn').forEach(btn => { btn.addEventListener('click', function(e) { e.stopPropagation();
+  document.querySelectorAll('.shop-spend-btn').forEach(btn => { btn.addEventListener('click', async function(e) { e.stopPropagation();
     const idx = parseInt(this.dataset.idx); const items = rewardItems.filter(r => r.kind === 'consumable');
     const item = items[idx]; if (!item) return;
     const qty = parseInt(document.querySelector('.psi-qty-input[data-idx="'+idx+'"]')?.value) || 1;
     const total = qty * item.cost;
     if (total <= 0 || total > getCoinBalance(selectedMemberId)) { showToast(total<=0?'请输入有效数量':'😅 Coin不够哦'); return; }
-    transactions.push({ id: genId(), memberId: selectedMemberId, type: 'spend_coin', amount: total, reason: item.title+' x'+qty, createdAt: fmtDateFull(new Date()) });
+    // 兑换前确认，防止误操作
+    const ok = await showConfirm('兑换「' + item.title + '」x' + qty + '，扣除 ' + total + ' 金币？', false);
+    if (!ok) return;
+    transactions.push({ id: genId(), memberId: selectedMemberId, type: 'spend_coin', amount: total, reason: item.title+' x'+qty, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
     logOp(getMemberName(selectedMemberId), '兑换', item.title+' x'+qty+' (-'+total+' Coin)');
     saveData(); showToast('🎉 兑换成功！'); updatePointsSheet();
   }); });
@@ -2006,7 +2294,7 @@ function renderPointsLog(monthKey) {
       const isNeg = t.type === 'spend_coin' || t.type === 'deduct_coin';
       const amtCls = isNeg ? 'negative' : (isExp ? 'exp' : 'positive');
       const sign = isNeg ? '-' : '+';
-      const label = t.type === 'spend_coin' ? '🛍️ 兑换' : t.type === 'deduct_coin' ? '⚠️ 扣分' : t.type === 'bonus_coin' ? '✨ 加分' : t.type === 'bonus_exp' ? '⭐ EXP奖励' : t.type === 'earn_exp' ? '📈 经验' : t.type === 'earn_coin' ? '💰 金币' : '📋 其他';
+      const label = t.type === 'spend_coin' ? '🛍️ 兑换' : t.type === 'refund_coin' ? '↩️ 退回' : t.type === 'deduct_coin' ? '⚠️ 扣分' : t.type === 'bonus_coin' ? '✨ 加分' : t.type === 'bonus_exp' ? '⭐ EXP奖励' : t.type === 'earn_exp' ? '📈 经验' : t.type === 'earn_coin' ? '💰 金币' : '📋 其他';
       html += '<div class="psl-item"><span class="psl-date">'+(t.createdAt||'').slice(5)+'</span><span class="psl-note">'+(getMemberName(t.memberId)||'')+' '+label+' '+(t.reason||'')+'</span><span class="psl-amount '+amtCls+'">'+sign+(t.amount||0)+'</span></div>';
     });
   }
@@ -2017,7 +2305,7 @@ function renderPointsLog(monthKey) {
 // ========== Sync ==========
 function getSyncData() {
   return { checks, streakState, effectiveLog, transactions, dateConfig, customItems, operationLog,
-    familyCode, parentPin, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, _schemaVersion: 2, _dataVersion };
+    familyCode, parentPin, securityQuestion, securityAnswer, lockedDates, family, members, habitTemplates, rewardItems, _levelConfig, outfitState, roomState, sceneZones, _schemaVersion: 2, _dataVersion };
 }
 let syncTimer = null, syncPending = false, syncPollInterval = null;
 function debounceSyncToServer() { clearTimeout(syncTimer); syncPending = true; syncTimer = setTimeout(() => { syncPending = false; syncToServer(); }, 500); }
@@ -2055,12 +2343,14 @@ async function loadFromServer() {
       if (r.dateConfig) dateConfig = r.dateConfig;
       if (r.customItems) customItems = r.customItems; if (r.operationLog) operationLog = r.operationLog;
       if (r.familyCode) familyCode = r.familyCode; if (r.parentPin !== undefined) parentPin = r.parentPin;
+      if (r.securityQuestion !== undefined) securityQuestion = r.securityQuestion; if (r.securityAnswer !== undefined) securityAnswer = r.securityAnswer;
       if (r.lockedDates) lockedDates = r.lockedDates;
       if (r.family) family = r.family; if (r.members) members = r.members;
       if (r.habitTemplates) habitTemplates = r.habitTemplates; if (r.rewardItems) rewardItems = r.rewardItems;
       if (r._levelConfig) _levelConfig = r._levelConfig;
       if (r.outfitState) outfitState = r.outfitState;
       if (r.roomState) roomState = r.roomState;
+      if (r.sceneZones) sceneZones = r.sceneZones;
       _dataVersion = serverVer;
       localStorage.setItem('habitrat:familyCode', familyCode);
       lastSyncTime = new Date(); syncStatus = 'ok'; updateSyncIndicator();
@@ -2180,10 +2470,13 @@ async function importBackup(file) {
     customItems = data.customItems || []; operationLog = data.operationLog || [];
     if (data.familyCode) { familyCode = data.familyCode; localStorage.setItem('habitrat:familyCode', familyCode); }
     if (data.parentPin !== undefined) parentPin = data.parentPin;
+    if (data.securityQuestion !== undefined) securityQuestion = data.securityQuestion;
+    if (data.securityAnswer !== undefined) securityAnswer = data.securityAnswer;
     if (data.family) family = data.family; if (data.members) members = data.members;
     if (data.habitTemplates) habitTemplates = data.habitTemplates; if (data.rewardItems) rewardItems = data.rewardItems;
     if (data._levelConfig) _levelConfig = data._levelConfig;
     if (data.roomState) roomState = data.roomState;
+    if (data.sceneZones) sceneZones = data.sceneZones;
     saveData(); recomputeStreaks();
     refreshCurrentView(); updateHeader(); syncToServer(); showToast('✅ 数据已恢复');
     if (currentView === 'settings') renderSettings();
@@ -2196,8 +2489,11 @@ async function toggleTodayLock() {
   if (locked) {
     // 解锁需要 PIN
     if (!parentPin) { showToast('⚠️ 请先在设置中设定 PIN'); return; }
-    var p = await showPinModal({ title: '🔐 输入 PIN 解锁当天' });
-    if (!p || p !== parentPin) { if (p) showToast('❌ PIN 不正确'); return; }
+    var p = await showPinModal({
+      title: '🔐 输入 PIN 解锁当天',
+      validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+    });
+    if (!p) return;
     delete lockedDates[todayStr]; saveData(); updateLockButton();
     showToast('🔓 已解锁，可以修改');
   } else {
@@ -2220,8 +2516,11 @@ function dayLockCheck(dateStr, action, callback) {
 }
 async function unlockWithPin(ds) {
   if (!parentPin) { showToast('⚠️ 请在设置中设定 PIN'); return; }
-  var p = await showPinModal({ title: '🔐 输入 PIN 解锁编辑' });
-  if (!p || p !== parentPin) { if (p) showToast('❌ PIN 不正确'); return; }
+  var p = await showPinModal({
+    title: '🔐 输入 PIN 解锁编辑',
+    validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+  });
+  if (!p) return;
   unlockedForEdit[ds] = true;
   showDayDetail(new Date(ds + 'T00:00:00'));
   showToast('🔓 已临时解锁，可编辑');
@@ -2260,9 +2559,84 @@ function closeConfirm(result) {
 }
 // 确认弹窗按钮事件（在 init 中绑定）
 let _pinResolve = null, _pinValue = '', _pinMode = '';
+let _pinValidate = null;
+let _secQOnSave = null;
+
+// ===== 密保问题 =====
+function openSecQModal(onSave) {
+  _secQOnSave = onSave || null;
+  var overlay = document.getElementById('secQOverlay');
+  if (!overlay) return;
+  document.getElementById('secQuestion').value = securityQuestion || '';
+  document.getElementById('secAnswer').value = '';
+  overlay.classList.add('show');
+  setTimeout(function() { var q = document.getElementById('secQuestion'); if (q) q.focus(); }, 50);
+}
+function saveSecQ() {
+  var q = document.getElementById('secQuestion').value.trim();
+  var a = document.getElementById('secAnswer').value.trim();
+  if (!q) { showToast('⚠️ 请输入密保问题'); return; }
+  if (!a) { showToast('⚠️ 请输入答案'); return; }
+  securityQuestion = q;
+  securityAnswer = a;
+  saveData();
+  document.getElementById('secQOverlay').classList.remove('show');
+  showToast('✅ 密保问题已保存');
+  if (_secQOnSave) { var cb = _secQOnSave; _secQOnSave = null; cb(); }
+}
+function closeSecQModal() {
+  var overlay = document.getElementById('secQOverlay');
+  if (overlay) overlay.classList.remove('show');
+  _secQOnSave = null;
+}
+
+// ===== 忘记 PIN 重置 =====
+function openForgotPin() {
+  var overlay = document.getElementById('forgotPinOverlay');
+  if (!overlay) return;
+  var qEl = document.getElementById('forgotPinQuestion');
+  if (securityQuestion) {
+    qEl.textContent = '❓ ' + securityQuestion;
+    document.getElementById('forgotPinAnswer').value = '';
+    overlay.classList.add('show');
+    setTimeout(function() { var a = document.getElementById('forgotPinAnswer'); if (a) a.focus(); }, 50);
+  } else {
+    // 没设密保问题，无法找回
+    showToast('⚠️ 未设置密保问题，无法找回 PIN');
+  }
+}
+function verifyForgotPin() {
+  var ans = document.getElementById('forgotPinAnswer').value.trim();
+  if (!securityAnswer || ans !== securityAnswer) { showToast('❌ 答案不正确'); return; }
+  document.getElementById('forgotPinOverlay').classList.remove('show');
+  showToast('✅ 验证通过，请设置新 PIN');
+  // 复用设置 PIN 流程
+  (async function() {
+    var p = await showPinModal({
+      title: '🔐 设置新 PIN',
+      validate: function(v) { return /^\d{4}$/.test(v) ? null : '⚠️ PIN 必须是 4 位数字'; }
+    });
+    if (!p) return;
+    var p2 = await showPinModal({
+      title: '🔐 请再次输入 PIN 确认',
+      validate: function(v) { return v === p ? null : '❌ 两次输入不一致，请重试'; }
+    });
+    if (!p2) return;
+    parentPin = p; saveData(); showToast('✅ PIN 已重置');
+    settingsUnlocked = true;
+    applySettingsLock();
+    renderSettings();
+  })();
+}
+function closeForgotPin() {
+  var overlay = document.getElementById('forgotPinOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
 function showPinModal(options) {
   return new Promise(resolve => {
     _pinResolve = resolve; _pinValue = ''; _pinMode = options.mode || 'unlock';
+    _pinValidate = options.validate || null;
     document.getElementById('pinTitle').textContent = options.title || '🔐 输入 PIN';
     document.getElementById('pinError').textContent = '';
     document.querySelectorAll('.pin-dot').forEach(d => d.className = 'pin-dot');
@@ -2271,6 +2645,7 @@ function showPinModal(options) {
 }
 function closePinModal(result) {
   document.getElementById('pinOverlay').classList.remove('show');
+  _pinValidate = null;
   if (_pinResolve) { _pinResolve(result); _pinResolve = null; }
 }
 function handlePinKey(key) {
@@ -2280,7 +2655,11 @@ function handlePinKey(key) {
   dots[_pinValue.length - 1].className = 'pin-dot filled';
   document.getElementById('pinError').textContent = '';
   if (_pinValue.length === 4) {
-    // 输入完成，返回结果
+    // 校验回调：返回错误文字则留在弹窗内报错并重置，返回 null 则关闭
+    if (_pinValidate) {
+      var err = _pinValidate(_pinValue);
+      if (err) { handlePinError(err); return; }
+    }
     closePinModal(_pinValue);
   }
 }
@@ -2506,7 +2885,9 @@ function updateTabPill() {
   pill.style.width = iw + 'px';
 }
 
+let settingsUnlocked = false;
 function switchView(view) {
+  if (view !== 'settings') settingsUnlocked = false;
   currentView = view;
   document.querySelectorAll('#homeView,#growthView,#shopView,#settingsView,#analyticsView').forEach(el => el.style.display = 'none');
   document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
@@ -2527,6 +2908,7 @@ function switchView(view) {
   } else if (view === 'settings') {
     document.getElementById('settingsView').style.display = 'block';
     document.querySelector('.tab[data-tab="settings"]').classList.add('active');
+    applySettingsLock();
     renderSettings();
   } else if (view === 'analytics') {
     document.getElementById('analyticsView').style.display = 'block';
@@ -2535,6 +2917,31 @@ function switchView(view) {
   }
   updateHeader();
   updateTabPill();
+}
+/** 根据 PIN 状态决定设置页是否显示锁屏 */
+function applySettingsLock() {
+  var lock = document.getElementById('settingsLock');
+  var content = document.getElementById('settingsContent');
+  if (!lock || !content) return;
+  if (!parentPin || settingsUnlocked) {
+    lock.classList.remove('show');
+    content.style.display = 'block';
+  } else {
+    lock.classList.add('show');
+    content.style.display = 'none';
+  }
+}
+/** 输入 PIN 解锁设置页 */
+async function unlockSettings() {
+  if (!parentPin) { settingsUnlocked = true; applySettingsLock(); showToast('✅ 设置已解锁'); return; }
+  var p = await showPinModal({
+    title: '🔐 输入 PIN 解锁设置',
+    validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+  });
+  if (!p) return;
+  settingsUnlocked = true;
+  applySettingsLock();
+  showToast('🔓 设置已解锁');
 }
 function goToWeek(date) {
   currentWeek = getMonday(date); currentHomeTab = 'week';
@@ -2745,24 +3152,44 @@ function refreshCurrentView() {
 }
 
 // ========== Settings ==========
+/** 自动保存假期配置：读取设置页中的假期行并保存 */
+function saveVacationConfig(showTip) {
+  const ranges = [];
+  document.querySelectorAll('#settingsView .vacation-row').forEach(row => {
+    const nameEl = row.querySelector('.v-name'); const startEl = row.querySelector('.v-start'); const endEl = row.querySelector('.v-end');
+    if (nameEl && startEl && endEl && startEl.value && endEl.value) {
+      ranges.push({ name: nameEl.tagName === 'INPUT' ? nameEl.value : nameEl.textContent, start: startEl.value, end: endEl.value });
+    }
+  });
+  dateConfig.vacationRanges = ranges;
+  saveData();
+  updateHeader();
+  if (showTip !== false) showToast('✅ 已自动保存');
+}
 function renderSettings() {
   // Child name
   var cnInput = document.getElementById('ssChildName');
   if (cnInput) cnInput.value = (localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')) || '小美';
-  // Vacation
+  // Vacation（编辑后自动保存）
   const container = document.getElementById('vacationList'); container.innerHTML = '';
   if (dateConfig.vacationRanges.length === 0) { dateConfig.vacationRanges = [{ name:'暑假',start:'2026-07-01',end:'2026-08-31'},{ name:'寒假',start:'2027-01-18',end:'2027-02-28'}]; }
+  function bindVacationRow(row) {
+    row.querySelectorAll('.v-name, .v-start, .v-end').forEach(function(input) {
+      input.addEventListener('change', function() { saveVacationConfig(); });
+    });
+    row.querySelector('.del-vacation').addEventListener('click', function() { row.remove(); saveVacationConfig(); });
+  }
   dateConfig.vacationRanges.forEach((r, i) => {
     const row = document.createElement('div'); row.className = 'vacation-row';
     row.innerHTML = '<span class="v-name">'+r.name+'</span><input type="date" class="v-start" value="'+r.start+'"><span>至</span><input type="date" class="v-end" value="'+r.end+'"><button class="del-vacation">✕</button>';
     container.appendChild(row);
-    row.querySelector('.del-vacation').addEventListener('click', function() { row.remove(); });
+    bindVacationRow(row);
   });
   document.getElementById('addVacation').onclick = function() {
     const row = document.createElement('div'); row.className = 'vacation-row';
     row.innerHTML = '<input class="v-name" value="自定义假期" style="width:80px;border:2px solid var(--paper-deep);border-radius:8px;padding:6px;font-size:13px;"><input type="date" class="v-start" value=""><span>至</span><input type="date" class="v-end" value=""><button class="del-vacation">✕</button>';
     container.appendChild(row);
-    row.querySelector('.del-vacation').addEventListener('click', function() { row.remove(); });
+    bindVacationRow(row);
   };
   // Members
   renderMemberSettings();
@@ -2795,12 +3222,49 @@ function renderSettings() {
     };
   }, 100);
   // PIN
+  var secQStatus = securityQuestion
+    ? '密保问题：<b>' + securityQuestion + '</b>'
+    : '⚠️ 未设置密保问题 — 忘记 PIN 时将无法找回';
   document.getElementById('ssPinInfo').innerHTML = parentPin
-    ? '<span style="font-size:13px;">当前 PIN：<b>●●●●</b></span> <button id="ssChangePin" class="add-btn" style="padding:4px 12px;border-style:solid;">修改</button>'
+    ? '<span style="font-size:13px;">当前 PIN：<b>●●●●</b></span> <button id="ssChangePin" class="add-btn" style="padding:4px 12px;border-style:solid;">修改</button><br><span style="font-size:12px;color:var(--ink-soft);margin-top:4px;display:inline-block;">' + secQStatus + '</span> <button id="ssEditSecQ" class="add-btn" style="padding:4px 12px;border-style:solid;">修改密保</button>'
     : '<span style="font-size:13px;color:var(--amber-deep);">⚠️ 未设置 PIN — 锁定当天后需 PIN 才能解锁编辑</span><br><button id="ssSetPin" style="margin-top:6px;font-size:12px;padding:6px 16px;border:2px solid var(--amber);border-radius:8px;background:var(--nav-active-bg);color:var(--ink);cursor:pointer;font-weight:600;">🔐 设置 PIN</button>';
   setTimeout(() => {
-    const setPinBtn = document.getElementById('ssSetPin'); if (setPinBtn) setPinBtn.onclick = async function() { var p = await showPinModal({ title: '🔐 设置 4 位 PIN' }); if (p && /^\d{4}$/.test(p)) { parentPin = p; saveData(); showToast('✅ PIN 已设置'); renderSettings(); } else if (p) showToast('⚠️ PIN 必须是 4 位数字'); };
-    const changePinBtn = document.getElementById('ssChangePin'); if (changePinBtn) changePinBtn.onclick = async function() { var old = await showPinModal({ title: '🔐 请输入当前 PIN' }); if (old !== parentPin) { if (old) showToast('❌ PIN 不正确'); return; } var p1 = await showPinModal({ title: '🔐 请输入新 PIN（4位数字）' }); if (!p1 || !/^\d{4}$/.test(p1)) { if (p1) showToast('⚠️ PIN 必须是 4 位数字'); return; } parentPin = p1; saveData(); showToast('✅ PIN 已更新'); renderSettings(); };
+    const setPinBtn = document.getElementById('ssSetPin'); if (setPinBtn) setPinBtn.onclick = async function() {
+      var p = await showPinModal({
+        title: '🔐 设置 4 位 PIN',
+        validate: function(v) { return /^\d{4}$/.test(v) ? null : '⚠️ PIN 必须是 4 位数字'; }
+      });
+      if (!p) return;
+      var p2 = await showPinModal({
+        title: '🔐 请再次输入 PIN 确认',
+        validate: function(v) { return v === p ? null : '❌ 两次输入不一致，请重试'; }
+      });
+      if (!p2) return;
+      parentPin = p; saveData(); showToast('✅ PIN 已设置'); renderSettings();
+      // 引导设置密保问题（用于忘记 PIN 时找回）
+      if (!securityQuestion) {
+        setTimeout(function() { openSecQModal(); }, 400);
+      }
+    };
+    const changePinBtn = document.getElementById('ssChangePin'); if (changePinBtn) changePinBtn.onclick = async function() {
+      var old = await showPinModal({
+        title: '🔐 请输入当前 PIN',
+        validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+      });
+      if (!old) return;
+      var p1 = await showPinModal({
+        title: '🔐 请输入新 PIN（4位数字）',
+        validate: function(v) { return /^\d{4}$/.test(v) ? null : '⚠️ PIN 必须是 4 位数字'; }
+      });
+      if (!p1) return;
+      var p1b = await showPinModal({
+        title: '🔐 请再次输入新 PIN 确认',
+        validate: function(v) { return v === p1 ? null : '❌ 两次输入不一致，请重试'; }
+      });
+      if (!p1b) return;
+      parentPin = p1; saveData(); showToast('✅ PIN 已更新'); renderSettings();
+    };
+    const editSecQBtn = document.getElementById('ssEditSecQ'); if (editSecQBtn) editSecQBtn.onclick = function() { openSecQModal(); };
   }, 100);
 }
 function renderMemberSettings() {
@@ -3224,14 +3688,17 @@ function renderShopView() {
   });
   // Buy buttons
   conGrid.querySelectorAll('.shop-buy-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', async function() {
       const idx = parseInt(this.dataset.idx);
       const items = rewardItems.filter(r => r.kind === 'consumable');
       const item = items[idx]; if (!item) return;
       const qty = parseInt(conGrid.querySelector('.shop-qty-input[data-idx="' + idx + '"]')?.value) || 1;
       const total = item.cost * qty;
       if (total <= 0 || total > getCoinBalance(childId)) { showToast(total <= 0 ? '请输入数量' : '😅 金币不够哦'); return; }
-      transactions.push({ id: genId(), memberId: childId, type: 'spend_coin', amount: total, reason: item.title + ' x' + qty, createdAt: fmtDateFull(new Date()) });
+      // 兑换前确认，防止误操作
+      const ok = await showConfirm('兑换「' + item.title + '」x' + qty + '，扣除 ' + total + ' 金币？', false);
+      if (!ok) return;
+      transactions.push({ id: genId(), memberId: childId, type: 'spend_coin', amount: total, reason: item.title + ' x' + qty, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
       logOp(getMemberName(childId), '兑换', item.title + ' x' + qty + ' (-' + total + ' Coin)');
       saveData(); showToast('🎉 兑换成功！'); renderShopView();
     });
@@ -3258,6 +3725,108 @@ function renderShopView() {
     });
   }
 
+  // 兑换记录（含退回记录）
+  const recordsContainer = document.getElementById('shopRecords');
+  if (recordsContainer) {
+    const records = transactions.filter(t => t.memberId === childId && (t.type === 'spend_coin' || t.type === 'refund_coin'))
+      .sort((a, b) => String(b.time || b.createdAt || '').localeCompare(String(a.time || a.createdAt || '')));
+    if (records.length === 0) {
+      recordsContainer.innerHTML = '<div style="margin-top:16px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">📜 兑换记录</div><div style="font-size:12px;color:var(--ink-soft);padding:8px 0;">还没有兑换记录</div></div>';
+    } else {
+      let html = '<div style="margin-top:16px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">📜 兑换记录（' + records.length + '）</div>'
+        + '<div style="max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--paper-deep);border-radius:10px;background:var(--card);">';
+      records.forEach(t => {
+        const time = t.time || (t.createdAt || '');
+        if (t.type === 'refund_coin') {
+          // 退回记录
+          html += '<div style="padding:9px 12px;border-bottom:1px solid var(--paper-deep);">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;">'
+            + '<span style="color:var(--ink-soft);white-space:nowrap;">' + time + '</span>'
+            + '<span style="font-weight:700;color:var(--teal);white-space:nowrap;">+' + (t.amount || 0) + '</span>'
+            + '</div>'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;font-size:13px;">'
+            + '<span style="flex:1;min-width:0;word-break:break-all;">' + (t.reason || '') + (t.note ? '（' + t.note + '）' : '') + '</span>'
+            + '<span style="color:var(--teal);font-size:11px;white-space:nowrap;">↩️ 退回</span>'
+            + '</div>'
+            + '</div>';
+        } else {
+          // 兑换记录
+          const refunded = !!t.refunded;
+          html += '<div style="padding:9px 12px;border-bottom:1px solid var(--paper-deep);' + (refunded ? 'opacity:.6;' : '') + '">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;">'
+            + '<span style="color:var(--ink-soft);white-space:nowrap;">' + time + '</span>'
+            + '<span style="font-weight:700;color:var(--coral);white-space:nowrap;">-' + (t.amount || 0) + '</span>'
+            + '</div>'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;font-size:13px;">'
+            + '<span style="flex:1;min-width:0;word-break:break-all;">' + (t.reason || '') + (refunded && t.refundNote ? '（已退：' + t.refundNote + '）' : '') + '</span>'
+            + (refunded
+                ? '<span style="color:var(--teal);font-size:11px;white-space:nowrap;">↩️ 已退回</span>'
+                : '<button class="shop-refund-btn" data-tid="' + t.id + '" style="border:none;border-radius:6px;background:var(--paper-deep);color:var(--ink);padding:3px 8px;font-size:11px;cursor:pointer;white-space:nowrap;">退回</button>')
+            + '</div>'
+            + '</div>';
+        }
+      });
+      html += '</div></div>';
+      recordsContainer.innerHTML = html;
+      // 绑定退回按钮
+      recordsContainer.querySelectorAll('.shop-refund-btn').forEach(b => {
+        b.addEventListener('click', function() {
+          const t = transactions.find(x => x.id === this.dataset.tid);
+          if (t) refundExchange(t);
+        });
+      });
+    }
+  }
+
+}
+
+// 退回理由输入弹窗（返回理由字符串；取消返回 null）
+function askRefundReason(t) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.className = 'modal-overlay show';
+    overlay.innerHTML = '<div class="modal-card" style="max-width:320px;padding:20px;text-align:left;">'
+      + '<div style="font-size:16px;font-weight:700;margin-bottom:4px;">↩️ 退回理由</div>'
+      + '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">退回「' + (t.reason || '') + '」的 ' + (t.amount || 0) + ' 金币，请说明原因</div>'
+      + '<textarea id="refundReasonInput" rows="2" placeholder="例如：误操作、奖励未享受" style="width:100%;padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:14px;resize:vertical;box-sizing:border-box;"></textarea>'
+      + '<div style="display:flex;gap:8px;margin-top:12px;">'
+      + '<button id="refundCancel" style="flex:1;padding:10px;border:2px solid var(--paper-deep);border-radius:10px;background:none;font-size:14px;cursor:pointer;">取消</button>'
+      + '<button id="refundOk" style="flex:1;padding:10px;border:none;border-radius:10px;background:var(--amber);color:var(--ink);font-size:14px;font-weight:700;cursor:pointer;">确定退回</button>'
+      + '</div></div>';
+    document.body.appendChild(overlay);
+    function close(r) { overlay.remove(); resolve(r); }
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(null); });
+    document.getElementById('refundCancel').onclick = function() { close(null); };
+    document.getElementById('refundOk').onclick = function() {
+      var v = document.getElementById('refundReasonInput').value;
+      if (!v.trim()) { showToast('请填写退回理由'); return; }
+      close(v.trim());
+    };
+  });
+}
+
+// 家长退回兑换（防止误操作；需 PIN + 填写理由；无时间限制，家长自行判断奖励是否已享受）
+async function refundExchange(t) {
+  if (!t || t.type !== 'spend_coin' || t.refunded) return;
+  // 家长 PIN 验证（未设置 PIN 则直接允许）
+  if (parentPin) {
+    const p = await showPinModal({
+      title: '🔐 家长验证',
+      validate: function(v) { return v === parentPin ? null : '❌ PIN 不正确'; }
+    });
+    if (!p) return;
+  }
+  // 填写退回理由
+  const note = await askRefundReason(t);
+  if (note === null) return; // 取消
+  if (!await showConfirm('退回「' + (t.reason || '') + '」的 ' + (t.amount || 0) + ' 金币？' + (note ? '（' + note + '）' : ''), true)) return;
+  t.refunded = true;
+  t.refundNote = note;
+  transactions.push({ id: genId(), memberId: t.memberId, type: 'refund_coin', amount: t.amount, reason: '退回：' + (t.reason || ''), note: note, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
+  logOp(getMemberName(t.memberId), '退回', (t.reason || '') + ' (+' + t.amount + ' Coin)' + '（' + note + '）');
+  saveData();
+  showToast('↩️ 已退回 ' + t.amount + ' 金币');
+  renderShopView();
 }
 
 // ========== 装扮视图渲染 ==========
@@ -3452,18 +4021,6 @@ function init() {
     w.document.write(document.getElementById('printableView').innerHTML);
     w.document.close();
   });
-  document.getElementById('btnSettingsSave').addEventListener('click', function() {
-    const ranges = [];
-    document.querySelectorAll('#settingsView .vacation-row').forEach(row => {
-      const nameEl = row.querySelector('.v-name'); const startEl = row.querySelector('.v-start'); const endEl = row.querySelector('.v-end');
-      if (nameEl && startEl && endEl && startEl.value && endEl.value) {
-        ranges.push({ name: nameEl.tagName === 'INPUT' ? nameEl.value : nameEl.textContent, start: startEl.value, end: endEl.value });
-      }
-    });
-    dateConfig.vacationRanges = ranges;
-    saveData(); showToast('✅ 设置已保存'); updateHeader();
-    if (currentView === 'home') renderHomeView();
-  });
   // Child name save
   var ssSaveCN = document.getElementById('ssSaveChildName'); if (ssSaveCN) ssSaveCN.addEventListener('click', function() {
     var name = document.getElementById('ssChildName').value.trim();
@@ -3507,6 +4064,12 @@ function init() {
   });
   document.getElementById('pinDel').addEventListener('click', handlePinDel);
   document.getElementById('pinCancel').addEventListener('click', function() { closePinModal(null); });
+  // 密保问题弹窗
+  var secQSave = document.getElementById('secQSave'); if (secQSave) secQSave.addEventListener('click', saveSecQ);
+  var secQSkip = document.getElementById('secQSkip'); if (secQSkip) secQSkip.addEventListener('click', closeSecQModal);
+  // 忘记 PIN 弹窗
+  var forgotConfirm = document.getElementById('forgotPinConfirm'); if (forgotConfirm) forgotConfirm.addEventListener('click', verifyForgotPin);
+  var forgotCancel = document.getElementById('forgotPinCancel'); if (forgotCancel) forgotCancel.addEventListener('click', closeForgotPin);
   // No responsive layout - mobile only
 
   // URL invite detection
