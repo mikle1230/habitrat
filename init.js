@@ -15,6 +15,23 @@ function init() {
     var overlay = document.getElementById('onboardOverlay')
     if (!overlay) return
     overlay.style.display = 'flex'
+    // Skip button for returning users
+    var skipBtn = document.getElementById('onboardSkip')
+    if (skipBtn) {
+      skipBtn.addEventListener('click', function() {
+        var childName = document.getElementById('onboardChildName').value.trim()
+        if (childName) {
+          var child = members.find(function(m) { return m.role === 'child' })
+          if (child) child.name = childName
+          localStorage.setItem('habitrat:childName', childName)
+        }
+        localStorage.setItem('habitrat:onboarded', 'true')
+        saveData(true)
+        overlay.style.display = 'none'
+        renderHomeView()
+        updateStatusBar()
+      })
+    }
     // Step 0 → Step 1
     var nextBtn = overlay.querySelector('[data-onboard-next]')
     if (nextBtn) {
