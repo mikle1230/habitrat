@@ -307,7 +307,7 @@ function init() {
   setInterval(autoLockCheck, 30000); // 每30秒检查
 
   // Init - start at home
-  if (!familyCode) { familyCode = generateFamilyCode(); localStorage.setItem('habitrat:familyCode', familyCode); family = { id: genId(), inviteCode: familyCode, createdAt: new Date().toISOString() }; }
+  if (!familyCode) { familyCode = generateFamilyCode(); localStorage.setItem('habitrat:familyCode', familyCode); family = { id: genId(), inviteCode: familyCode, createdAt: new Date().toISOString() }; saveData(true); }
   // Render initial SVG
   const childId = getChildMembers()[0]?.id || members[0]?.id;
   // 暂时关闭：Hero 区 SVG 头像，改用静态 PNG
