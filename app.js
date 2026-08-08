@@ -3313,6 +3313,42 @@ function hideCoinSources() {
   document.getElementById('coinSourceOverlay').classList.remove('show');
   document.getElementById('coinSourceSheet').classList.remove('show');
 }
+function showSpentHistory() {
+  var childId = getChildMembers()[0]?.id || selectedMemberId || members[0]?.id
+  if (!childId) return
+  var records = transactions.filter(function(t) {
+    return t.memberId === childId && (t.type === 'spend_coin' || t.type === 'deduct_coin' || t.type === 'refund_coin')
+  }).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || '') })
+  var html = ''
+  if (records.length === 0) {
+    html = '<div style="text-align:center;color:var(--ink-soft);padding:20px;">暂无兑换记录</div>'
+  } else {
+    var totalSpent = 0, totalRefunded = 0
+    records.forEach(function(t) {
+      var dateStr = t.createdAt ? t.createdAt.slice(0, 10) : ''
+      var isRefund = t.type === 'refund_coin'
+      var isDeduct = t.type === 'deduct_coin'
+      if (isRefund) {
+        totalRefunded += t.amount
+        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason" style="color:var(--teal);">↩️ ' + (t.reason || '退回') + '</div><div class="css-date">' + dateStr + '</div></div><span class="css-amt" style="color:var(--teal);">+' + t.amount + '</span></div>'
+      } else if (isDeduct) {
+        totalSpent += t.amount
+        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">⚠️ ' + (t.reason || '扣分') + '</div><div class="css-date">' + dateStr + '</div></div><span class="css-amt" style="color:var(--coral);">-' + t.amount + '</span></div>'
+      } else {
+        totalSpent += t.amount
+        var refunded = t.refundedAmount || 0
+        var refundMark = refunded > 0 ? ' <span style="font-size:10px;color:var(--teal);">(已退' + refunded + ')</span>' : ''
+        html += '<div class="css-row"><div style="min-width:0;"><div class="css-reason">🛍️ ' + (t.reason || '兑换') + refundMark + '</div><div class="css-date">' + dateStr + '</div></div><span class="css-amt">-' + t.amount + '</span></div>'
+      }
+    })
+    var netSpent = totalSpent - totalRefunded
+    html += '<div class="css-total"><span>合计支出 ' + totalSpent + ' · 退回 ' + totalRefunded + '</span><span style="color:var(--coral);">🛍️ ' + netSpent + '</span></div>'
+  }
+  document.getElementById('cssTitle').textContent = '🛍️ 兑换记录'
+  document.getElementById('cssBody').innerHTML = html
+  document.getElementById('coinSourceOverlay').classList.add('show')
+  document.getElementById('coinSourceSheet').classList.add('show')
+}
 
 function showPendingCoins() {
   const childId = getChildMembers()[0]?.id || selectedMemberId || members[0]?.id;
@@ -4443,6 +4479,7 @@ function init() {
   // 金币弹窗
   document.getElementById('statusEarnedBox').addEventListener('click', showCoinSources);
   document.getElementById('statusPendingBox').addEventListener('click', showPendingCoins);
+  document.getElementById('statusSpentBox').addEventListener('click', showSpentHistory)
   document.getElementById('coinSourceOverlay').addEventListener('click', hideCoinSources);
   document.getElementById('cssClose').addEventListener('click', hideCoinSources);
 
