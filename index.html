@@ -11,6 +11,43 @@
 </head>
 <body>
 <div class="app" id="app">
+<!-- ===== 首次使用引导 ===== -->
+<div class="onboard-overlay" id="onboardOverlay" style="display:none;">
+  <div class="onboard-card">
+    <div class="onboard-step active" data-step="0">
+      <div class="onboard-illustration">
+        <svg width="80" height="80" viewBox="0 0 36 36">
+          <ellipse cx="18" cy="22" rx="12" ry="9" fill="#C97B4A"/>
+          <circle cx="10" cy="10" r="5" fill="#C97B4A"/>
+          <circle cx="26" cy="10" r="5" fill="#C97B4A"/>
+          <circle cx="10" cy="10" r="2.4" fill="#F3D9C4"/>
+          <circle cx="26" cy="10" r="2.4" fill="#F3D9C4"/>
+          <circle cx="14" cy="19" r="1.6" fill="#2B2250"/>
+          <circle cx="22" cy="19" r="1.6" fill="#2B2250"/>
+          <ellipse cx="18" cy="24" rx="2.2" ry="1.6" fill="#A85F32"/>
+        </svg>
+      </div>
+      <h2 class="onboard-title">欢迎来到 HabitRat！</h2>
+      <p class="onboard-desc">和 Ratty 一起养成好习惯，<br>让每一天都闪闪发光 ✨</p>
+      <button class="onboard-btn-primary" data-onboard-next>开始吧 →</button>
+    </div>
+    <div class="onboard-step" data-step="1">
+      <div class="onboard-illustration">👋</div>
+      <h2 class="onboard-title">先认识一下</h2>
+      <p class="onboard-desc">这位小探险家叫什么名字？</p>
+      <div class="onboard-field">
+        <label class="onboard-label" for="onboardChildName">宝贝的名字 <span class="onboard-required">*</span></label>
+        <input class="onboard-input" id="onboardChildName" type="text" placeholder="输入宝贝的名字" maxlength="20" autocomplete="off">
+      </div>
+      <div class="onboard-field">
+        <label class="onboard-label" for="onboardParentName">家长的名字（可选）</label>
+        <input class="onboard-input" id="onboardParentName" type="text" placeholder="你的名字" maxlength="20" autocomplete="off">
+      </div>
+      <p class="onboard-hint">可以之后在设置中修改或添加更多家庭成员</p>
+      <button class="onboard-btn-primary" id="onboardFinish">开始冒险 🚀</button>
+    </div>
+  </div>
+</div>
 <!-- ===== Header（软陶风格） ===== -->
 <div class="header" id="header">
   <div class="header-nav">
@@ -36,7 +73,7 @@
         <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="handleAvatarUpload(this)">
       </div>
       <div class="hero-info">
-        <div class="hi-level">Lv.<span id="statusLevel">1</span> · <span id="statusTitle">新手冒险者</span> <span class="hi-name" id="mascotName">小美</span> <span class="hi-greeting" id="dailyGreeting">🌙 夜深了</span></div>
+        <div class="hi-level">Lv.<span id="statusLevel">1</span> · <span id="statusTitle">新手冒险者</span> <span class="hi-name" id="mascotName">宝贝</span> <span class="hi-greeting" id="dailyGreeting">🌙 夜深了</span></div>
         <div class="hi-xp-block">
           <div class="hi-xp-track-wrap">
             <div class="hi-xp-track"><div class="hi-xp-fill" id="statusExpFill" style="--xp-pct:0%"></div></div>
@@ -250,7 +287,7 @@
     <div class="settings-lock" id="settingsLock">
       <div class="sl-icon">🔒</div>
       <div class="sl-title">设置已被锁定</div>
-      <div class="sl-sub">这里是爸爸妈妈管理的区域，输入 PIN 码才能查看</div>
+      <div class="sl-sub">这里是家长管理的区域，输入 PIN 码才能查看</div>
       <button class="sl-btn" onclick="unlockSettings()">🔐 输入 PIN 解锁</button>
       <div class="sl-forgot" onclick="openForgotPin()">忘记 PIN 了？</div>
     </div>
@@ -300,7 +337,7 @@
 <!-- ===== 打印视图（桌面 >=768px） ===== -->
 <div class="printable-view" id="printableView">
   <div class="p-header"><h1>🌟 好习惯积分表</h1><span class="p-week-badge" id="pWeekBadge"></span></div>
-  <div class="p-subtitle">宝贝：<span contenteditable="true" id="pChildName">小美</span> 日期：<span id="pWeekRange"></span> 模式：<span class="mode-badge" id="pModeLabel">工作日</span></div>
+  <div class="p-subtitle">宝贝：<span contenteditable="true" id="pChildName">宝贝</span> 日期：<span id="pWeekRange"></span> 模式：<span class="mode-badge" id="pModeLabel">工作日</span></div>
   <div class="p-summary" id="pSummary"></div>
   <table class="p-table"><thead><tr><th style="width:5.5%">人物</th><th style="width:13%">好习惯项目</th><th style="width:18%">细则要求</th><th style="width:6%">连续</th><th style="width:7%">EXP/Coin</th><th style="width:7%" id="pHdrMon">周一</th><th style="width:7%" id="pHdrTue">周二</th><th style="width:7%" id="pHdrWed">周三</th><th style="width:7%" id="pHdrThu">周四</th><th style="width:7%" id="pHdrFri">周五</th><th style="width:7%" id="pHdrSat">周六</th><th style="width:7%" id="pHdrSun">周日</th><th style="width:6%">生效</th></tr></thead><tbody id="pTableBody"></tbody></table>
   <div class="p-legend"><span><span class="dot green"></span> ✔ 已完成</span><span><span class="dot red"></span> ✗ 未完成</span><span>○ 待完成</span><span>— 不适用日</span><span style="margin-left:12px;"><b>连续</b>：当前/目标</span><span style="color:var(--teal);"><b>生效</b>：连续达标获得</span></div>

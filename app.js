@@ -121,7 +121,7 @@ const GAME_RULES = [
     title: '金币和奖励',
     lines: [
       '金币可以用来在「商店」里兑换奖励。',
-      '奖励是爸爸妈妈和你一起商量好的，兑换前记得先问问哦。'
+      '奖励是家长和你一起商量好的，兑换前记得先问问哦。'
     ],
     tip: '金币花掉了还能再赚，每天坚持打卡就有金币啦！'
   },
@@ -141,7 +141,7 @@ const GAME_RULES = [
     lines: [
       '每天到 <b>23:59</b>，当天内容会自动锁定，不能再改。',
       '这样能保证记录是真实的，避免不小心误操作。',
-      '如果当天真的需要修改，可以让爸爸妈妈用 PIN 码解锁。'
+      '如果当天真的需要修改，可以让家长用 PIN 码解锁。'
     ]
   },
   {
@@ -149,14 +149,14 @@ const GAME_RULES = [
     title: '节假日和寒暑假',
     lines: [
       '在假期里，有些习惯的时间要求会放松一点。',
-      '寒暑假的时间段会在「设置」里由爸爸妈妈配置，当天顶部会有提示。'
+      '寒暑假的时间段会在「设置」里由家长配置，当天顶部会有提示。'
     ]
   }
 ];
 
 // 1. Legacy Data
 const HABITS_LEGACY = [
-  { id:'mom_bf', personKey:'xiaomei', emoji:'🥣', name:'妈妈吃早饭', pts:10, streakNeed:3, rule:'8:30前', ruleVacation:'9:00前', applicable:'all' },
+  { id:'mom_bf', personKey:'xiaomei', emoji:'🥣', name:'家长吃早饭', pts:10, streakNeed:3, rule:'8:30前', ruleVacation:'9:00前', applicable:'all' },
   { id:'xm_brush', personKey:'xiaomei', emoji:'💧', name:'刷牙', pts:1, streakNeed:5, rule:'7:30前', ruleVacation:'8:00前', applicable:'all' },
   { id:'xm_wash', personKey:'xiaomei', emoji:'🧼', name:'洗脸', pts:2, streakNeed:5, rule:'7:30前', ruleVacation:'8:00前', applicable:'all' },
   { id:'xm_bf', personKey:'xiaomei', emoji:'🥣', name:'吃早饭', pts:5, streakNeed:5, rule:'7:40前', ruleVacation:'8:30前', applicable:'all' },
@@ -164,8 +164,12 @@ const HABITS_LEGACY = [
   { id:'xm_dinner', personKey:'xiaomei', emoji:'🍜', name:'吃晚饭', pts:5, streakNeed:5, rule:'17:00-19:30', ruleVacation:'17:00-19:30', applicable:'all' },
   { id:'xm_sleep1', personKey:'xiaomei', emoji:'😴', name:'睡觉（目标一）', pts:10, streakNeed:5, rule:'21:30前', ruleVacation:'22:00前', applicable:'all' },
   { id:'xm_sleep2', personKey:'xiaomei', emoji:'🌙', name:'睡觉（目标二）', pts:5, streakNeed:5, rule:'22:00前', ruleVacation:'22:30前', applicable:'all' },
-  { id:'mom_sleep', personKey:'xiaomei', emoji:'😴', name:'妈妈早睡觉', pts:10, streakNeed:3, rule:'22:30前', ruleVacation:'23:00前', applicable:'all' },
-];
+  { id:'mom_sleep', personKey:'xiaomei', emoji:'😴', name:'家长早睡觉', pts:10, streakNeed:3, rule:'22:30前', ruleVacation:'23:00前', applicable:'all' },
+]
+// 仅通用习惯（新用户默认，排除家庭特定习惯）
+function getDefaultHabits() {
+  return HABITS_LEGACY.filter(function(h) { return h.id !== 'mom_bf' && h.id !== 'mom_sleep' })
+}
 const FAMILY_LEGACY = ['爸爸','妈妈','小美','爷爷','奶奶','外公','外婆'];
 const FAMILY_EMOJI = {'爸爸':'👨','妈妈':'👩','小美':'👧','爷爷':'👴','奶奶':'👵','外公':'👴','外婆':'👵'};
 
@@ -255,6 +259,15 @@ function getChildMembers() { return members.filter(m => m.role === 'child'); }
 function getGuardianMembers() { return members.filter(m => m.role === 'guardian'); }
 function getMemberName(id) { const m = getMemberById(id); return m ? m.name : '未知'; }
 function getMemberEmoji(id) { const m = getMemberById(id); if (!m) return '👤'; if (m.role === 'guardian') return '👩'; return '👧'; }
+const DEFAULT_CHILD_NAME = '宝贝'
+const DEFAULT_GUARDIAN_NAME = '家长'
+function getChildDisplayName() {
+  const stored = localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')
+  if (stored) return stored
+  const child = members.find(function(m) { return m.role === 'child' })
+  if (child) return child.name
+  return DEFAULT_CHILD_NAME
+}
 function getCoinBalance(memberId) {
   const earn = transactions.filter(t => t.memberId === memberId && (t.type === 'earn_coin' || t.type === 'bonus_coin' || t.type === 'refund_coin')).reduce((s, t) => s + t.amount, 0);
   const spent = transactions.filter(t => t.memberId === memberId && (t.type === 'spend_coin' || t.type === 'deduct_coin')).reduce((s, t) => s + t.amount, 0);
@@ -297,6 +310,11 @@ function getDefaultCollectibles() {
     { level: 15, emoji: '🐉', name: '神龙徽章' }, { level: 16, emoji: '🦅', name: '雄鹰徽章' },
     { level: 17, emoji: '🐺', name: '狼王徽章' }, { level: 18, emoji: '🦁', name: '狮王徽章' },
     { level: 19, emoji: '🏆', name: '冠军徽章' }, { level: 20, emoji: '🌌', name: '银河徽章' },
+  ];
+}
+function getDefaultCashItems() {
+  return [
+    { id: genId(), kind: 'consumable', title: '💵 兑换零花钱', cost: 1, unit: '元' },
   ];
 }
 function getHabitMeta(habitId) {
@@ -529,7 +547,7 @@ function loadData() {
       });
       if (dateConfig.vacationRanges.length === 0) { dateConfig.vacationRanges = [{ name:'暑假',start:'2026-07-01',end:'2026-08-31'},{ name:'寒假',start:'2027-01-18',end:'2027-02-28'}]; }
       if (!family) { family = { id: genId(), inviteCode: familyCode || generateFamilyCode(), createdAt: new Date().toISOString() }; }
-      if (members.length === 0) { members = FAMILY_LEGACY.map((name, i) => ({ id: genId(), name, role: i < 2 ? 'guardian' : (i === 2 ? 'child' : 'viewer'), totalExp: 0 })); }
+      if (members.length === 0) { members = [{ id: genId(), name: DEFAULT_GUARDIAN_NAME, role: 'guardian', totalExp: 0 }, { id: genId(), name: DEFAULT_CHILD_NAME, role: 'child', totalExp: 0 }]; }
       if (habitTemplates.length === 0) {
         const childMemberId2 = members.find(m => m.role === 'child')?.id || members[0]?.id;
         habitTemplates = HABITS_LEGACY.map(h => ({ id: h.id, ownerMemberId: childMemberId2, title: h.name, emoji: h.emoji, expValue: h.pts, coinValue: h.pts, streakNeed: h.streakNeed, ruleText: h.rule, ruleVacation: h.ruleVacation, applicable: h.applicable, archived: false }));
@@ -539,6 +557,8 @@ function loadData() {
       // Clean CI transactions
       const ciCheckedIds = new Set(customItems.filter(ci => ci.status === '✓').map(ci => ci.id));
       transactions = transactions.filter(t => { if (t.type !== 'bonus_coin' && t.type !== 'bonus') return true; if (!t.reason || !t.reason.startsWith('CI:')) return true; const ciId = t.reason.slice(3).split(' ')[0]; return ciCheckedIds.has(ciId); });
+      // 老用户已引导
+      localStorage.setItem('habitrat:onboarded', 'true')
       return false; // already V4, no migration needed
     }
     // Try V3 migration
@@ -558,20 +578,27 @@ function loadData() {
       if (!selectedMemberId) selectedMemberId = getChildMembers()[0]?.id || members[0]?.id;
       // Backup V3
       if (!localStorage.getItem('habitTableV3_backup')) localStorage.setItem('habitTableV3_backup', v3raw);
+      // 老用户已引导
+      localStorage.setItem('habitrat:onboarded', 'true')
       saveData(true);
       return true; // migrated
     }
   } catch(e) { console.error('loadData error:', e); }
   // Initialize defaults
   if (!family) { family = { id: genId(), inviteCode: familyCode || generateFamilyCode(), createdAt: new Date().toISOString() }; }
-  if (members.length === 0) { members = [{ id: genId(), name: '妈妈', role: 'guardian', totalExp: 0 }, { id: genId(), name: '小美', role: 'child', totalExp: 0 }]; }
+  if (members.length === 0) { members = [{ id: genId(), name: DEFAULT_GUARDIAN_NAME, role: 'guardian', totalExp: 0 }, { id: genId(), name: DEFAULT_CHILD_NAME, role: 'child', totalExp: 0 }]; }
   if (habitTemplates.length === 0) {
     const childMemberId3 = members.find(m => m.role === 'child')?.id || members[0]?.id;
-    habitTemplates = HABITS_LEGACY.map(h => ({ id: h.id, ownerMemberId: childMemberId3, title: h.name, emoji: h.emoji, expValue: h.pts, coinValue: h.pts, streakNeed: h.streakNeed, ruleText: h.rule, ruleVacation: h.ruleVacation, applicable: h.applicable, archived: false }));
+    habitTemplates = getDefaultHabits().map(function(h) { return { id: h.id, ownerMemberId: childMemberId3, title: h.name, emoji: h.emoji, expValue: h.pts, coinValue: h.pts, streakNeed: h.streakNeed, ruleText: h.rule, ruleVacation: h.ruleVacation, applicable: h.applicable, archived: false } })
   }
   if (rewardItems.length === 0) {
     rewardItems = [{ id: genId(), kind: 'consumable', title: '🎮 玩游戏', cost: 1, unit: '分钟' }];
+    getDefaultCashItems().forEach(function(c) { rewardItems.push(c); });
     getDefaultCollectibles().forEach(c => { rewardItems.push({ id: genId(), kind: 'collectible', title: c.name, emoji: c.emoji, unlockLevel: c.level }); });
+  }
+  // 补填现金兑换项（已有数据的老用户）
+  if (!rewardItems.some(function(r) { return r.unit === '元'; })) {
+    getDefaultCashItems().forEach(function(c) { rewardItems.push(c); });
   }
   if (!selectedMemberId) selectedMemberId = getChildMembers()[0]?.id || members[0]?.id;
   return false;
@@ -630,8 +657,8 @@ function showCiEditForm(ci, onSave) {
 }
 
 function editMascotName() {
-  var cur = (localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')) || '小美';
-  var name = prompt('宝贝名字', cur);
+  var cur = getChildDisplayName()
+  var name = prompt('宝贝名字', cur)
   if (name !== null && name.trim()) {
     localStorage.setItem('habitrat:childName', name.trim());
     document.getElementById('mascotName').textContent = name.trim();
@@ -757,8 +784,41 @@ function _readHabitFormFields(prefix, h) {
 }
 
 function showHabitEditForm(h, onSave) {
-  showModalForm('✎ 编辑习惯', _renderHabitFormFields(h, 'he'), function() {
+  // 统计已有打卡记录
+  var checkDays = 0;
+  Object.keys(checks).forEach(function(wk) {
+    var weekData = checks[wk];
+    if (weekData[h.id]) {
+      weekData[h.id].forEach(function(st) { if (st === '✓') checkDays++; });
+    }
+  });
+  // 统计连续达标次数
+  var streakRewards = transactions.filter(function(t) {
+    return t.habitId === h.id && t.type === 'earn_coin';
+  }).length;
+
+  var warningHtml = '';
+  if (checkDays > 0) {
+    warningHtml = '<div style="background:#fff8e1;border:1px solid var(--amber);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--amber-deep);line-height:1.6;">'
+      + '⚠️ 该习惯已有 <b>' + checkDays + '</b> 天打卡记录' + (streakRewards > 0 ? '和 <b>' + streakRewards + '</b> 次连续达标奖励' : '') + '。<br>'
+      + '修改 EXP/💰/连续天数仅影响<b>未来</b>打卡，历史积分保持不变。</div>';
+  }
+
+  // 保存修改前的规则值，用于检测变更
+  var oldStreakNeed = h.streakNeed;
+  var oldExpValue = h.expValue;
+  var oldCoinValue = h.coinValue;
+  var oldApplicable = h.applicable;
+
+  showModalForm('✎ 编辑习惯', warningHtml + _renderHabitFormFields(h, 'he'), function() {
     if (!_readHabitFormFields('he', h)) return false;
+    // 如果规则字段有变化且有历史记录，记录变更日期
+    if (checkDays > 0) {
+      if (oldStreakNeed !== h.streakNeed || oldExpValue !== h.expValue ||
+          oldCoinValue !== h.coinValue || oldApplicable !== h.applicable) {
+        h.ruleChangedAt = fmtDateFull(new Date());
+      }
+    }
     saveData(); showToast('✅ 已更新');
     if (onSave) onSave();
   });
@@ -899,7 +959,37 @@ function spawnConfetti() {
 }
 
 // ========== recomputeStreaks (dual-currency) ==========
-/** 核心引擎：遍历一年内的打卡数据，重算连续天数、发放 EXP/Coin、检测升级。每次打卡/编辑后必须调用 */
+/** 核心引擎：从最早数据日期遍历打卡数据，重算连续天数、发放 EXP/Coin、检测升级。每次打卡/编辑后必须调用 */
+
+/** 找到数据中最早的日期（从 checks + transactions），用于扫描起点 */
+function findEarliestDataDate() {
+  var earliest = new Date(); // 默认今天
+  // 从 checks 中找最早周
+  Object.keys(checks).forEach(function(wk) {
+    var parts = wk.split('-W');
+    if (parts.length !== 2) return;
+    var year = parseInt(parts[0]), week = parseInt(parts[1]);
+    // ISO 周 1 的周一：1月4日所在周的周一
+    var jan4 = new Date(year, 0, 4);
+    var dayOfJan4 = jan4.getDay() || 7;
+    var monWeek1 = new Date(jan4);
+    monWeek1.setDate(jan4.getDate() - (dayOfJan4 - 1));
+    // 目标周的周一
+    var mon = new Date(monWeek1);
+    mon.setDate(monWeek1.getDate() + (week - 1) * 7);
+    if (mon < earliest) earliest = mon;
+  });
+  // 从 transactions 中找最早日期
+  transactions.forEach(function(t) {
+    if (t.createdAt) {
+      var d = new Date(t.createdAt + 'T00:00:00');
+      if (!isNaN(d) && d < earliest) earliest = d;
+    }
+  });
+  // 再往前多扫一周，确保不会漏掉跨周连续
+  earliest.setDate(earliest.getDate() - 7);
+  return earliest;
+}
 
 /** 为历史交易补填 habitId（迁移辅助，idempotent） */
 function migrateTxHabitIds() {
@@ -948,10 +1038,11 @@ function recomputeStreaks() {
     }
   });
 
-  // 孤儿检测：扫描 ALL 习惯（含归档），确保已归档习惯的交易不会被误删
+  // 孤儿检测：从最早数据日期开始扫描 ALL 习惯（含归档），确保已归档习惯的交易不会被误删
+  // Bug C 修复：不再使用 365 天硬编码窗口，改为动态找到最早数据日期
   var validExpKeys = {};
   var validCoinKeys = {};
-  var cursor2 = new Date(); cursor2.setFullYear(cursor2.getFullYear() - 1);
+  var cursor2 = findEarliestDataDate();
   while (fmtDateFull(cursor2) <= todayStr) {
     var ds2 = fmtDateFull(cursor2);
     habitTemplates.forEach(function(h) {
@@ -982,6 +1073,27 @@ function recomputeStreaks() {
   // 已归档/已删除习惯的交易（habitId 不在活跃列表中）不在此过滤，始终保留
   var activeHabitIds = {};
   getActiveHabits().forEach(function(h) { activeHabitIds[h.id] = true; });
+
+  // Bug D 修复：验证 earn_coin 的底层 ✓ 连续是否存在（用 snapshot.streakNeed）
+  // 避免因修改 streakNeed 导致历史金币被回退
+  // 非 applicable 日跳过（与原始算法一致：假期/周末不打断连续）
+  function verifyCoinStreak(t, habit) {
+    if (!habit) return true; // 习惯不存在，保留
+    var need = (t.snapshot && t.snapshot.streakNeed) || habit.streakNeed || 5;
+    var coinDate = new Date(t.createdAt + 'T00:00:00');
+    var cons = 0;
+    var cursor = new Date(coinDate);
+    // 向后扫描最多 120 天，跳过非 applicable 日
+    for (var i = 0; i < 120; i++) {
+      if (!isDayApplicable(habit, cursor)) { cursor.setDate(cursor.getDate() - 1); continue; }
+      if (getDayStatus(habit, cursor) === '✓') { cons++; }
+      else { break; } // ✗ 或 ○ 中断连续
+      if (cons >= need) return true;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return cons >= need;
+  }
+
   transactions = transactions.filter(function(t) {
     if (t.type === 'earn_exp' && t.habitId) {
       if (!activeHabitIds[t.habitId]) return true; // 已归档/已删除的习惯，保留
@@ -989,7 +1101,8 @@ function recomputeStreaks() {
     }
     if (t.type === 'earn_coin' && t.habitId) {
       if (!activeHabitIds[t.habitId]) return true; // 已归档/已删除的习惯，保留
-      return validCoinKeys[t.createdAt + '|' + t.habitId];
+      // Bug D：用实际 ✓ 连续验证，而非用当前 streakNeed 重算
+      return verifyCoinStreak(t, allHabitsById[t.habitId]);
     }
     // 无 habitId 的遗留 earn_exp（兜底，保留）
     if (t.type === 'earn_exp' && t.reason && t.reason.startsWith('[单次] ')) {
@@ -1000,7 +1113,7 @@ function recomputeStreaks() {
     if (t.type === 'earn_coin' && t.reason && t.reason.indexOf(' 连续达标') > -1) {
       var title4 = t.reason.replace(' 连续达标', '');
       var h4 = habitTemplates.find(function(x) { return x.title === title4; });
-      if (h4) return validCoinKeys[t.createdAt + '|' + h4.id];
+      if (h4) return verifyCoinStreak(t, h4);
       return true; // 无法匹配，保留
     }
     return true;
@@ -1015,20 +1128,50 @@ function recomputeStreaks() {
     effectiveLog[h.id] = [];
   });
 
-  // 主计算：只对活跃习惯补发未处理的日期
-  var cursor = new Date(); cursor.setFullYear(cursor.getFullYear() - 1);
+  // 预计算每个习惯的「旧规则」快照（用于 ruleChangedAt 之前的日期）
+  var oldRules = {};
+  getActiveHabits().forEach(function(h) {
+    if (!h.ruleChangedAt) return;
+    var oldTx = null;
+    // 找 ruleChangedAt 之前最近的一笔交易，提取旧规则
+    for (var ti = transactions.length - 1; ti >= 0; ti--) {
+      var tx = transactions[ti];
+      if (tx.habitId === h.id && (tx.type === 'earn_exp' || tx.type === 'earn_coin') &&
+          tx.snapshot && tx.createdAt < h.ruleChangedAt) {
+        oldTx = tx; break;
+      }
+    }
+    if (oldTx && oldTx.snapshot) {
+      oldRules[h.id] = {
+        streakNeed: oldTx.snapshot.streakNeed || h.streakNeed || 5,
+        expValue: oldTx.snapshot.expValue || h.expValue || 10,
+        coinValue: oldTx.snapshot.coinValue || h.coinValue || 10
+      };
+    }
+  });
+
+  // 主计算：从最早数据日期开始，只对活跃习惯补发未处理的日期
+  // Bug C 修复：不再使用 365 天硬编码窗口
+  var cursor = findEarliestDataDate();
   while (fmtDateFull(cursor) <= todayStr) {
     var ds = fmtDateFull(cursor);
     getActiveHabits().forEach(function(h) {
       if (!isDayApplicable(h, cursor)) return;
+
+      // 根据日期选择有效规则：ruleChangedAt 之前的日期用旧规则
+      var useOldRules = h.ruleChangedAt && ds < h.ruleChangedAt && oldRules[h.id];
+      var effStreakNeed = useOldRules ? oldRules[h.id].streakNeed : (h.streakNeed || 5);
+      var effExpValue = useOldRules ? oldRules[h.id].expValue : (h.expValue || 10);
+      var effCoinValue = useOldRules ? oldRules[h.id].coinValue : (h.coinValue || 10);
+
       var status = getDayStatus(h, cursor);
       if (status === '✓') {
         var meta = getHabitMeta(h.id);
-        var singleExp = h.expValue || meta.expValue || 10;
+        var singleExp = effExpValue;
         var expKey = ds + '|' + h.id;
         if (!earnedExpSet[expKey]) {
           transactions.push({ id: genId(), habitId: h.id, memberId: meta.ownerMemberId, type: 'earn_exp', amount: singleExp, reason: '[单次] ' + h.title, createdAt: ds,
-            snapshot: { expValue: h.expValue || 10, coinValue: h.coinValue || 10, streakNeed: h.streakNeed || 5 } });
+            snapshot: { expValue: effExpValue, coinValue: effCoinValue, streakNeed: effStreakNeed } });
         }
         var mem = getMemberById(meta.ownerMemberId);
         if (mem && !earnedExpSet[expKey]) mem.totalExp += singleExp;
@@ -1039,13 +1182,13 @@ function recomputeStreaks() {
         else { streakState[h.id].count = 1; }
         streakState[h.id].lastDate = ds;
 
-        if (streakState[h.id].count >= (h.streakNeed || 5)) {
-          effectiveLog[h.id].push({ date: ds, pts: (h.expValue || h.coinValue || 10) * (h.streakNeed || 5) });
-          var earnCoin = (h.coinValue || meta.coinValue || 10) * (h.streakNeed || 5);
+        if (streakState[h.id].count >= effStreakNeed) {
+          effectiveLog[h.id].push({ date: ds, pts: effCoinValue * effStreakNeed });
+          var earnCoin = effCoinValue * effStreakNeed;
           var coinKey = ds + '|' + h.id;
           if (!earnedCoinSet[coinKey]) {
             transactions.push({ id: genId(), habitId: h.id, memberId: meta.ownerMemberId, type: 'earn_coin', amount: earnCoin, reason: h.title + ' 连续达标', createdAt: ds,
-              snapshot: { expValue: h.expValue || 10, coinValue: h.coinValue || 10, streakNeed: h.streakNeed || 5 } });
+              snapshot: { expValue: effExpValue, coinValue: effCoinValue, streakNeed: effStreakNeed } });
           }
           streakState[h.id].count = 0;
           streakState[h.id].lastDate = null;
@@ -1340,7 +1483,7 @@ function getAnalyticsData(memberId) {
   const habits = getActiveHabits();
   const DOW = ['日','一','二','三','四','五','六'];
   const member = getMemberById(memberId);
-  const memberName = member ? member.name : '小美';
+  const memberName = member ? member.name : getChildDisplayName()
 
   // --- 今天每个习惯的状态 ---
   const todayStr = fmtDateFull(today);
@@ -2395,6 +2538,10 @@ async function loadFromServer() {
       if (r.lockedDates) lockedDates = r.lockedDates;
       if (r.family) family = r.family; if (r.members) members = r.members;
       if (r.habitTemplates) habitTemplates = r.habitTemplates; if (r.rewardItems) rewardItems = r.rewardItems;
+      // 补填现金兑换项（同步后确保存在）
+      if (rewardItems && !rewardItems.some(function(r) { return r.unit === '元'; })) {
+        getDefaultCashItems().forEach(function(c) { rewardItems.push(c); });
+      }
       if (r._levelConfig) _levelConfig = r._levelConfig;
       if (r.outfitState) outfitState = r.outfitState;
       if (r.roomState) roomState = r.roomState;
@@ -2734,7 +2881,7 @@ function renderMobileWeekReport() {
   var DOW=['一','二','三','四','五','六','日'];
   var mode=getModeForDate(currentWeek);
   var wkNum=getWeekKey(currentWeek).split('-W')[1];
-  var savedName=(localStorage.getItem('habitrat:childName')||localStorage.getItem('habitTable_childName'))||'小美';
+  var savedName=getChildDisplayName()
   var today=fmtDateFull(new Date());
 
   var S=' style="';
@@ -2813,7 +2960,7 @@ function renderPrintableWeek() {
   var DOW = ['一','二','三','四','五','六','日'];
   var mode = getModeForDate(currentWeek);
   var wkNum = getWeekKey(currentWeek).split('-W')[1];
-  var savedName = (localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')) || '小美';
+  var savedName = getChildDisplayName()
 
   // Build inline-styled HTML
   var S = ' style="';
@@ -3090,7 +3237,7 @@ function updateStatusBar() {
   renderMascotSvg(childId, 'mascotSvg');
   // Mascot name + avatar
   const mnEl = document.getElementById('mascotName');
-  if (mnEl) mnEl.textContent = (localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')) || getMemberName(childId) || '小美';
+  if (mnEl) mnEl.textContent = getChildDisplayName()
   updateAvatarDisplay();
   // Daily greeting
   const greeting = document.getElementById('dailyGreeting');
@@ -3217,7 +3364,7 @@ function saveVacationConfig(showTip) {
 function renderSettings() {
   // Child name
   var cnInput = document.getElementById('ssChildName');
-  if (cnInput) cnInput.value = (localStorage.getItem('habitrat:childName') || localStorage.getItem('habitTable_childName')) || '小美';
+  if (cnInput) cnInput.value = getChildDisplayName()
   // Vacation（编辑后自动保存）
   const container = document.getElementById('vacationList'); container.innerHTML = '';
   if (dateConfig.vacationRanges.length === 0) { dateConfig.vacationRanges = [{ name:'暑假',start:'2026-07-01',end:'2026-08-31'},{ name:'寒假',start:'2027-01-18',end:'2027-02-28'}]; }
@@ -4021,6 +4168,62 @@ async function initSync() {
 function init() {
   loadData();
   recomputeStreaks();
+  // ---- 首次使用引导 ----
+  (function initOnboarding() {
+    var HAS_ONBOARDED = localStorage.getItem('habitrat:onboarded') === 'true'
+    if (HAS_ONBOARDED) return
+    var overlay = document.getElementById('onboardOverlay')
+    if (!overlay) return
+    overlay.style.display = 'flex'
+    // Step 0 → Step 1
+    var nextBtn = overlay.querySelector('[data-onboard-next]')
+    if (nextBtn) {
+      nextBtn.addEventListener('click', function() {
+        overlay.querySelectorAll('.onboard-step').forEach(function(s) { s.classList.remove('active') })
+        var step1 = overlay.querySelector('[data-step="1"]')
+        if (step1) step1.classList.add('active')
+      })
+    }
+    // Finish
+    var finishBtn = document.getElementById('onboardFinish')
+    if (finishBtn) {
+      finishBtn.addEventListener('click', function() {
+        var childName = document.getElementById('onboardChildName').value.trim()
+        if (!childName) {
+          var input = document.getElementById('onboardChildName')
+          input.style.borderColor = 'var(--coral)'
+          input.placeholder = '请输入宝贝的名字'
+          input.focus()
+          return
+        }
+        // 保存 child name
+        localStorage.setItem('habitrat:childName', childName)
+        // 更新 child member
+        var child = members.find(function(m) { return m.role === 'child' })
+        if (child) child.name = childName
+        // 更新 guardian member（可选）
+        var parentName = document.getElementById('onboardParentName').value.trim()
+        if (parentName) {
+          var guardian = members.find(function(m) { return m.role === 'guardian' })
+          if (guardian) guardian.name = parentName
+        }
+        // 标记已引导
+        localStorage.setItem('habitrat:onboarded', 'true')
+        saveData(true)
+        // 隐藏引导，刷新 UI
+        overlay.style.display = 'none'
+        renderHomeView()
+        updateStatusBar()
+      })
+    }
+    // Enter 键提交
+    var childInput = document.getElementById('onboardChildName')
+    if (childInput) {
+      childInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && finishBtn) finishBtn.click()
+      })
+    }
+  })()
   currentMonth = new Date(); currentMonth.setDate(1);
   currentWeek = getMonday(new Date());
 
