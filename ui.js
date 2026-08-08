@@ -329,30 +329,30 @@ function getAnalyticsData(memberId) {
   const todayTotal = todayItems.filter(i => i.status !== 'na').length;
   const allDoneToday = todayTotal > 0 && todayDone === todayTotal;
 
-  // --- 鼓励语（简单自然）---
+  // --- 鼓励语 ---
   let encourage = '';
   if (allDoneToday) {
-    encourage = '今天全部完成，太棒啦！🎉';
+    encourage = '今天全部完成 🎉';
   } else if (todayDone > 0) {
-    encourage = '今天完成了 ' + todayDone + '/' + todayTotal + '，继续加油！👍';
+    encourage = '完成 ' + todayDone + '/' + todayTotal + '，还有 ' + (todayTotal - todayDone) + ' 项';
   } else {
-    encourage = '今天还没开始呢，一起动起来吧！💪';
+    encourage = '今天还没开始';
   }
 
-  // --- 弱习惯改善建议 ---
+  // --- 弱习惯建议 ---
   function getWeakTip(habit, rate) {
     if (rate < 30) {
       const tips = [
-        '试试把「' + habit.title + '」放在早上做吧 ☀️',
-        '今天就开始「' + habit.title + '」，哪怕一次也好 🌱',
-        '定个闹钟提醒自己「' + habit.title + '」⏰'
+        '试试早上完成「' + habit.title + '」',
+        '从今天开始「' + habit.title + '」，哪怕一次',
+        '设个闹钟提醒「' + habit.title + '」'
       ];
       return tips[habit.id.charCodeAt(habit.id.length - 1) % tips.length];
     } else {
       const tips = [
-        '离目标不远了，这周再努力几次就能达标！🎯',
-        '已经做了一半多，坚持下去就会变习惯 ⭐',
-        '给自己一个小目标：连续完成3天「' + habit.title + '」🔥'
+        '快达标了，这周再坚持几次',
+        '已经过半，保持节奏',
+        '目标：连续3天完成「' + habit.title + '」'
       ];
       return tips[habit.id.charCodeAt(habit.id.length - 1) % tips.length];
     }
@@ -388,11 +388,11 @@ function renderAnalyticsView(memberId) {
   // 今日总结
   let summaryText = '';
   if (ad.allDoneToday) {
-    summaryText = '🎉 今天 ' + ad.todayDone + '/' + ad.todayTotal + ' 全部完成！你是最棒的！';
+    summaryText = '🎉 今天 ' + ad.todayDone + '/' + ad.todayTotal + ' 全部完成';
   } else if (ad.todayDone > 0) {
-    summaryText = '👍 今天完成 ' + ad.todayDone + '/' + ad.todayTotal + '，还有 ' + (ad.todayTotal - ad.todayDone) + ' 项没做，加油！';
+    summaryText = '完成 ' + ad.todayDone + '/' + ad.todayTotal + '，还有 ' + (ad.todayTotal - ad.todayDone) + ' 项';
   } else {
-    summaryText = '💪 今天还没开始打卡，现在做起来吧！';
+    summaryText = '今天还没开始打卡';
   }
   html += '<div class="aj-today-summary">' + summaryText + '</div>';
   html += '</div></div>';
@@ -433,10 +433,10 @@ function renderAnalyticsView(memberId) {
   // === 5. 连续天数 ===
   if (ad.currentStreak > 0) {
     const streakText = ad.currentStreak >= 7
-      ? '🔥 连续 ' + ad.currentStreak + ' 天全勤打卡！你太厉害了！'
+      ? '🔥 连续 ' + ad.currentStreak + ' 天全勤打卡！'
       : (ad.currentStreak >= 3
-        ? '🔥 已经连续 ' + ad.currentStreak + ' 天全部完成，保持住！'
-        : '🔥 连续 ' + ad.currentStreak + ' 天全勤，好势头！');
+        ? '🔥 连续 ' + ad.currentStreak + ' 天全部完成'
+        : '🔥 连续 ' + ad.currentStreak + ' 天全勤');
     html += '<div class="analytics-section"><div class="aj-streak-card">'
       + '<div class="aj-streak-fire">🔥</div>'
       + '<div class="aj-streak-text">' + streakText + '</div>'
@@ -1417,7 +1417,7 @@ function renderReviewPage() {
   best.forEach(function(s) {
     html += '<div class="review-item">'
       + '<div class="ri-emoji">'+(s.habit.emoji||'📌')+'</div>'
-      + '<div class="ri-info"><div class="ri-name">'+s.habit.title+'</div><div class="ri-msg">'+(s.streak>1?'连续 '+s.streak+' 天坚持，很棒！':'近7天完成 '+s.done+'/'+s.total+' 次')+'</div></div>'
+      + '<div class="ri-info"><div class="ri-name">'+s.habit.title+'</div><div class="ri-msg">'+(s.streak>1?'连续 '+s.streak+' 天坚持':'近7天完成 '+s.done+'/'+s.total+' 次')+'</div></div>'
       + '<div class="ri-stat good">'+s.rate+'%</div>'
       + '</div>';
   });
@@ -1425,7 +1425,7 @@ function renderReviewPage() {
 
   html += '<div class="review-section"><div class="review-label">💪 继续加油</div>';
   worst.forEach(function(s) {
-    var tip = s.rate < 30 ? '试试调整时间，找到合适的节奏' : (s.rate < 60 ? '再坚持一下就能看到变化' : '只差一点点了，加油！');
+    var tip = s.rate < 30 ? '可以调整时间试试' : (s.rate < 60 ? '再坚持一下' : '差一点就达标了');
     html += '<div class="review-item">'
       + '<div class="ri-emoji">'+(s.habit.emoji||'📌')+'</div>'
       + '<div class="ri-info"><div class="ri-name">'+s.habit.title+'</div><div class="ri-msg">'+tip+'</div></div>'
@@ -1995,13 +1995,13 @@ function updateStatusBar() {
     const avgHabits = Math.max(1, getActiveHabits().length || 1);
     const tasksNeeded = Math.ceil(prog.needExp / Math.max(1, avgHabits));
     if (prog.needExp <= 0) {
-      hintEl.textContent = '🎉 已达到满级！太厉害了！';
+      hintEl.textContent = '🎉 已满级';
     } else if (tasksNeeded <= 3) {
-      hintEl.textContent = '🔥 再做 ' + tasksNeeded + ' 个好习惯就能升级！';
+      hintEl.textContent = '🔥 再做 ' + tasksNeeded + ' 个习惯就能升级';
     } else if (tasksNeeded <= 10) {
-      hintEl.textContent = '💪 再做 ' + tasksNeeded + ' 个好习惯，加油！';
+      hintEl.textContent = '还需约 ' + tasksNeeded + ' 个习惯升级';
     } else {
-      hintEl.textContent = '🌟 继续坚持，好习惯在改变你！';
+      hintEl.textContent = '还需约 ' + tasksNeeded + ' 个习惯升级';
     }
   }
   // 金币相关
@@ -2029,12 +2029,12 @@ function updateStatusBar() {
   const greeting = document.getElementById('dailyGreeting');
   if (greeting) {
     const hour = new Date().getHours();
-    if (hour < 6) greeting.textContent = '🌙 夜深了，今天辛苦了';
-    else if (hour < 9) greeting.textContent = '🌅 早安！新的一天，新的冒险';
-    else if (hour < 12) greeting.textContent = '☀️ 上午好，继续前进';
-    else if (hour < 14) greeting.textContent = '🌤️ 中午好，记得休息';
-    else if (hour < 18) greeting.textContent = '🌻 下午好，坚持就是力量';
-    else greeting.textContent = '🌆 傍晚了，复盘今天的收获吧';
+    if (hour < 6) greeting.textContent = '🌙 夜深了';
+    else if (hour < 9) greeting.textContent = '🌅 早安';
+    else if (hour < 12) greeting.textContent = '☀️ 上午好';
+    else if (hour < 14) greeting.textContent = '🌤️ 中午好';
+    else if (hour < 18) greeting.textContent = '🌻 下午好';
+    else greeting.textContent = '🌆 傍晚好';
   }
 }
 

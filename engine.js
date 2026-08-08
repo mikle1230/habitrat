@@ -526,11 +526,11 @@ function showLevelUp(memberId, level) {
     unlockDiv.innerHTML = unlockHtml;
   } else { unlockDiv.style.display = 'none'; }
   // Add description
-  document.getElementById('lvlupDesc').textContent = hasUnlock ? 'HabitRat 获得了新装扮，继续保持哦！' : '继续加油，养成好习惯！';
+  document.getElementById('lvlupDesc').textContent = hasUnlock ? 'HabitRat 获得了新装扮！' : '继续加油，养成好习惯';
   // Confetti
   spawnConfetti();
   el.classList.add('show');
-  document.getElementById('lvlupClose').textContent = '太棒了！';
+  document.getElementById('lvlupClose').textContent = '好的！';
   document.getElementById('lvlupClose').onclick = function() { el.classList.remove('show'); };
   // Auto close after 4s
   setTimeout(function() { el.classList.remove('show'); }, 4000);
@@ -595,12 +595,12 @@ function showLevelInfo(targetLevel) {
     if (prevItems.length > 6) unlockHtml += '<div style="font-size:10px;color:rgba(255,255,255,0.4);">...等</div>';
   }
   if (!unlockHtml) {
-    unlockHtml = '<div class="lu-label">🌱 继续打卡升级来解锁物品吧！</div>';
+    unlockHtml = '<div class="lu-label">🌱 继续打卡升级来解锁物品</div>';
   }
   unlockDiv.style.display = 'block';
   unlockDiv.innerHTML = unlockHtml;
   // Change close button
-  document.getElementById('lvlupClose').textContent = '太好啦！';
+  document.getElementById('lvlupClose').textContent = '知道了';
   // Show overlay, no auto-close
   el.classList.add('show');
   document.getElementById('lvlupClose').onclick = function() { el.classList.remove('show'); };

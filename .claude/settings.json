@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rn '--glow\\\\|var\\(--glow\\)' /Users/michael/Projects/habitrat/ --include='*.js' --include='*.html')"
+    ]
+  }
+}

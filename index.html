@@ -28,7 +28,7 @@
         </svg>
       </div>
       <h2 class="onboard-title">欢迎来到 HabitRat！</h2>
-      <p class="onboard-desc">和 Ratty 一起养成好习惯，<br>让每一天都闪闪发光 ✨</p>
+      <p class="onboard-desc">和 Ratty 一起，<br>每天进步一点点</p>
       <button class="onboard-btn-primary" data-onboard-next>开始吧 →</button>
     </div>
     <div class="onboard-step" data-step="1">
@@ -44,7 +44,7 @@
         <input class="onboard-input" id="onboardParentName" type="text" placeholder="你的名字" maxlength="20" autocomplete="off">
       </div>
       <p class="onboard-hint">可以之后在设置中修改或添加更多家庭成员</p>
-      <button class="onboard-btn-primary" id="onboardFinish">开始冒险 🚀</button>
+      <button class="onboard-btn-primary" id="onboardFinish">开始使用</button>
     </div>
   </div>
 </div>
@@ -216,7 +216,7 @@
         <div class="rules-card-icon">📜</div>
         <div class="rules-card-text">
           <div class="rules-card-title">游戏规则</div>
-          <div class="rules-card-sub">想知道怎么升级、怎么赚金币？点这里</div>
+          <div class="rules-card-sub">怎么升级、怎么赚金币？</div>
         </div>
         <div class="rules-card-arrow">›</div>
       </div>
@@ -285,31 +285,31 @@
   <div class="settings-view" id="settingsView">
     <div class="settings-lock" id="settingsLock">
       <div class="sl-icon">🔒</div>
-      <div class="sl-title">设置已被锁定</div>
-      <div class="sl-sub">这里是家长管理的区域，输入 PIN 码才能查看</div>
+      <div class="sl-title">设置已锁定</div>
+      <div class="sl-sub">输入 PIN 码解锁</div>
       <button class="sl-btn" onclick="unlockSettings()">🔐 输入 PIN 解锁</button>
       <div class="sl-forgot" onclick="openForgotPin()">忘记 PIN 了？</div>
     </div>
     <div id="settingsContent">
     <!-- 1. 同步与安全 -->
-    <div class="ss-group-title">🔐 同步与安全</div>
+    <div class="ss-group-title">同步与安全</div>
     <div class="ss-section"><div class="sss-title">家长 PIN</div><div id="ssPinInfo"></div></div>
     <div class="ss-section"><div class="sss-title">跨设备同步</div>
-      <div style="margin-bottom:10px;">家庭码 <span class="ss-code" id="ssFamilyCode">------</span> <button id="ssCopyCode" class="add-btn" style="padding:6px 12px;border-style:solid;">📋 复制</button></div>
+      <div style="margin-bottom:10px;">家庭码 <span class="ss-code" id="ssFamilyCode">------</span> <button id="ssCopyCode" class="add-btn" style="padding:6px 12px;border-style:solid;">复制</button></div>
       <div id="ssInviteSection" style="margin-bottom:10px;"></div>
       <div class="ss-field"><input id="ssJoinCode" placeholder="输入6位家庭码" maxlength="6" style="text-transform:uppercase;"><button id="ssJoinBtn">加入</button></div>
     </div>
     <!-- 2. 基础信息 -->
-    <div class="ss-group-title">👧 基础信息</div>
+    <div class="ss-group-title">基础信息</div>
     <div class="ss-section"><div class="sss-title">孩子名称</div>
       <div class="ss-field"><input id="ssChildName" placeholder="输入孩子名称"><button id="ssSaveChildName">保存</button></div>
     </div>
     <div class="ss-section"><div class="sss-title">家庭成员</div><div id="ssMembers"></div><button class="add-btn" id="ssAddMember">＋ 添加成员</button></div>
     <!-- 3. 习惯管理（高频） -->
-    <div class="ss-group-title">📋 习惯</div>
+    <div class="ss-group-title">习惯</div>
     <div class="ss-section"><div class="sss-title">习惯管理</div><div id="ssHabits"></div><button class="add-btn" id="ssAddHabit">＋ 添加习惯</button></div>
     <!-- 3.5 补充打卡 -->
-    <div class="ss-section"><div class="sss-title">📅 补充历史打卡</div>
+    <div class="ss-section"><div class="sss-title">补充历史打卡</div>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">补充今天往前最多 45 天内的打卡记录</div>
       <div class="ss-row" style="align-items:center;">
         <input type="date" id="ssBackfillStart" style="padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;flex:1;">
@@ -317,13 +317,13 @@
         <input type="date" id="ssBackfillEnd" style="padding:8px;border:2px solid var(--paper-deep);border-radius:8px;font-size:13px;flex:1;">
       </div>
       <div id="ssBackfillHabits" style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;"></div>
-      <button id="ssBackfillBtn" style="width:100%;padding:10px;background:var(--amber);color:var(--ink);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">📅 批量补充打卡</button>
+      <button id="ssBackfillBtn" style="width:100%;padding:10px;background:var(--amber);color:var(--ink);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">批量补充打卡</button>
     </div>
     <!-- 4. 假期设置 -->
-    <div class="ss-group-title">🏖 假期</div>
+    <div class="ss-group-title">假期</div>
     <div class="ss-section"><div class="sss-title">寒暑假日期</div><div id="vacationList"></div><button class="add-btn" id="addVacation">＋ 添加假期区间</button></div>
     <!-- 5. 数据管理（危险区） -->
-    <div class="ss-group-title">💾 数据管理</div>
+    <div class="ss-group-title">数据管理</div>
     <div class="ss-section"><div class="sss-title">备份与恢复</div>
       <div class="ss-row"><button id="ssExportBackup" class="primary">📤 导出完整备份</button><button id="ssImportBackup" class="danger">📥 从备份恢复</button></div>
       <input type="file" class="ss-file" id="ssImportFile" accept=".json">
