@@ -665,27 +665,64 @@ function editMascotName() {
     showToast('✅ 已更新');
   }
 }
+var _avatarPressTimer = null
 function changeAvatar() {
-  document.getElementById('avatarFileInput').click();
+  // 在 mousedown/touchstart 绑定时启动计时器，此处不做任何事（onclick 保留用于快速点击场景）
+  document.getElementById('avatarFileInput').click()
+}
+// 长按恢复默认 — 在 init() 中绑定
+function bindAvatarLongPress() {
+  var ring = document.getElementById('mascotRing')
+  if (!ring) return
+  function startTimer(e) {
+    _avatarPressTimer = setTimeout(async function() {
+      _avatarPressTimer = null
+      if (!localStorage.getItem('habitrat:avatar') && !localStorage.getItem('habitTable_avatar')) return
+      var ok = await showConfirm('恢复为默认 Ratty 头像？', true)
+      if (!ok) return
+      localStorage.removeItem('habitrat:avatar')
+      localStorage.removeItem('habitTable_avatar')
+      updateAvatarDisplay()
+      showToast('↩️ 已恢复默认头像')
+    }, 600)
+  }
+  function cancelTimer() {
+    if (_avatarPressTimer) { clearTimeout(_avatarPressTimer); _avatarPressTimer = null }
+  }
+  ring.addEventListener('mousedown', startTimer)
+  ring.addEventListener('mouseup', cancelTimer)
+  ring.addEventListener('mouseleave', cancelTimer)
+  ring.addEventListener('touchstart', startTimer, { passive: true })
+  ring.addEventListener('touchend', cancelTimer)
+  ring.addEventListener('touchcancel', cancelTimer)
 }
 function handleAvatarUpload(input) {
-  var file = input.files[0]; if (!file) return;
-  var reader = new FileReader();
+  var file = input.files[0]; if (!file) return
+  var reader = new FileReader()
   reader.onload = function(e) {
-    localStorage.setItem('habitrat:avatar', e.target.result);
-    updateAvatarDisplay();
-    showToast('✅ 头像已更新');
-  };
-  reader.readAsDataURL(file);
+    localStorage.setItem('habitrat:avatar', e.target.result)
+    updateAvatarDisplay()
+    showToast('✅ 头像已更新')
+  }
+  reader.readAsDataURL(file)
+  // 清空 input 使同一文件可再次选中
+  input.value = ''
 }
 function updateAvatarDisplay() {
-  var url = (localStorage.getItem('habitrat:avatar') || localStorage.getItem('habitTable_avatar')) || '';
-  var img = document.getElementById('mascotAvatar');
-  var svg = document.getElementById('mascotSvg');
+  var url = (localStorage.getItem('habitrat:avatar') || localStorage.getItem('habitTable_avatar')) || ''
+  var img = document.getElementById('mascotAvatar')
+  var svg = document.getElementById('mascotSvg')
+  if (!img || !svg) return
   if (url) {
-    img.src = url; img.style.display = 'block'; svg.style.display = 'none';
+    img.src = url
+    img.className = 'avatar-custom'
+    img.style.display = 'block'
+    svg.style.display = 'none'
   } else {
-    img.src = 'docs/design/头像.png'; img.style.display = 'block'; svg.style.display = 'none';
+    img.src = ''
+    img.className = ''
+    img.style.display = 'none'
+    svg.style.display = ''
   }
 }
 
@@ -2446,7 +2483,7 @@ function renderExchangeItems() {
     if (!ok) return;
     transactions.push({ id: genId(), memberId: selectedMemberId, type: 'spend_coin', amount: total, reason: item.title+' x'+qty, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
     logOp(getMemberName(selectedMemberId), '兑换', item.title+' x'+qty+' (-'+total+' Coin)');
-    saveData(); showToast('🎉 兑换成功！'); updatePointsSheet();
+    saveData(); showToast('🎉 兑换成功！'); updatePointsSheet(); updateHeader();
   }); });
   // Bind delete
   document.querySelectorAll('.shop-del-btn').forEach(btn => { btn.addEventListener('click', async function(e) { e.stopPropagation();
@@ -3970,7 +4007,7 @@ function renderShopView() {
       if (!ok) return;
       transactions.push({ id: genId(), memberId: childId, type: 'spend_coin', amount: total, reason: item.title + ' x' + qty, createdAt: fmtDateFull(new Date()), time: fmtDateTime(new Date()) });
       logOp(getMemberName(childId), '兑换', item.title + ' x' + qty + ' (-' + total + ' Coin)');
-      saveData(); showToast('🎉 兑换成功！'); renderShopView();
+      saveData(); showToast('🎉 兑换成功！'); renderShopView(); updateHeader();
     });
   });
 
@@ -4122,7 +4159,7 @@ async function refundExchange(t) {
   logOp(getMemberName(t.memberId), '退回', (t.reason || '') + ' (+' + partialAmount + '/' + t.amount + ' Coin)' + '（' + note + '）');
   saveData();
   showToast('↩️ 已退回 ' + partialAmount + ' 金币' + (t.refundedAmount >= t.amount ? '（已全额退回）' : '（剩余可退 ' + (t.amount - t.refundedAmount) + ' 🪙）'));
-  renderShopView();
+  renderShopView(); updateHeader();
 }
 
 // ========== 装扮视图渲染 ==========
@@ -4224,6 +4261,8 @@ function init() {
       })
     }
   })()
+  // 头像长按恢复默认
+  bindAvatarLongPress()
   currentMonth = new Date(); currentMonth.setDate(1);
   currentWeek = getMonday(new Date());
 

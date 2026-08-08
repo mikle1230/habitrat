@@ -64,10 +64,10 @@
   <div class="status-band" id="statusBand">
     <div class="hero-main">
       <div class="hero-avatar">
-        <div class="mascot-ring" id="mascotRing" style="--xp-pct:0;cursor:pointer;" onclick="changeAvatar()" title="点击更换头像">
+        <div class="mascot-ring" id="mascotRing" style="--xp-pct:0;cursor:pointer;" onclick="changeAvatar()" title="点击更换头像 · 长按恢复默认">
           <div class="mascot-ring-inner">
-            <img id="mascotAvatar" src="docs/design/头像.png" onerror="this.style.display='none';document.getElementById('mascotSvg').style.display='block';">
-            <svg id="mascotSvg" width="36" height="36" viewBox="0 0 36 36" style="pointer-events:none;display:none;"></svg>
+            <img id="mascotAvatar" src="" style="display:none;">
+            <svg id="mascotSvg" width="36" height="36" viewBox="0 0 36 36" style="pointer-events:none;"></svg>
           </div>
         </div>
         <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="handleAvatarUpload(this)">
